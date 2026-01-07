@@ -424,15 +424,37 @@ function CarController({
             arrowRef.current.lookAt(target.x, pos[1], target.z);
         }
 
-        // Límits del mapa
+        // Límits del mapa amb REBOT (Bounce)
         const currentViewport = state.viewport.getCurrentViewport(state.camera, new THREE.Vector3(0, 2, pos[2]));
         const visibleWidth = currentViewport.width;
         const maxX = (visibleWidth / 2) - 0.5;
+        const BOUNCE_FACTOR = 0.6; // Quant rebota (0.6 = perd 40% energia)
+
+        // Helper per rebotar
+        const applyBounce = (axis: 'x' | 'z') => {
+            // Recalcular vectors actuals
+            let vx = -Math.sin(velocityVectorAngle.current) * currentSpeed.current;
+            let vz = -Math.cos(velocityVectorAngle.current) * currentSpeed.current;
+
+            if (axis === 'x') vx = -vx * BOUNCE_FACTOR;
+            if (axis === 'z') vz = -vz * BOUNCE_FACTOR;
+
+            // Recalcular angle i velocitat
+            currentSpeed.current = Math.sqrt(vx * vx + vz * vz);
+            // Matenim la direcció positiva de la velocitat i ajustem l'angle
+            // atan2 retorna l'angle des del Nord (-Z) si passem (-vx, -vz)
+            velocityVectorAngle.current = Math.atan2(-vx, -vz);
+        };
+
         if (Math.abs(pos[0]) > maxX) {
             const clampedX = THREE.MathUtils.clamp(pos[0], -maxX, maxX);
+            // Només rebotem si encara ens estem movent cap a fora (per evitar atrapaments)
+            const movingOut = (pos[0] > 0 && vx > 0) || (pos[0] < 0 && vx < 0);
+
             api.position.set(clampedX, pos[1], pos[2]);
-            if ((pos[0] > 0 && vx > 0) || (pos[0] < 0 && vx < 0)) {
-                currentSpeed.current *= 0.5; // Xoc contra paret
+
+            if (movingOut) {
+                applyBounce('x');
             }
         }
 
@@ -440,9 +462,12 @@ function CarController({
         const MAP_MAX_Z = 235;
         if (pos[2] < MAP_MIN_Z || pos[2] > MAP_MAX_Z) {
             const clampedZ = THREE.MathUtils.clamp(pos[2], MAP_MIN_Z, MAP_MAX_Z);
+            const movingOut = (pos[2] <= MAP_MIN_Z && vz < 0) || (pos[2] >= MAP_MAX_Z && vz > 0);
+
             api.position.set(pos[0], pos[1], clampedZ);
-            if ((pos[2] <= MAP_MIN_Z && vz < 0) || (pos[2] >= MAP_MAX_Z && vz > 0)) {
-                currentSpeed.current *= 0.5; // Xoc contra límits Z
+
+            if (movingOut) {
+                applyBounce('z');
             }
         }
 
