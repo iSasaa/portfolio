@@ -384,7 +384,7 @@ function CarController({
         window.addEventListener('wheel', handleInteraction);
         window.addEventListener('mousemove', handleInteraction);
         window.addEventListener('mousedown', handleInteraction);
-        window.addEventListener('touchstart', handleInteractions);
+        window.addEventListener('touchstart', handleInteraction);
 
         return () => {
             window.removeEventListener('wheel', handleInteraction);
