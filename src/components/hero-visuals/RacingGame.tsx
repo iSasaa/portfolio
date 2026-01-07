@@ -280,7 +280,6 @@ function RaceStartPad({ position }: { position: [number, number, number] }) {
 
 
 function CarController({
-    setDebugInfo,
     currentCheckpoint,
     setCurrentCheckpoint,
     setIsGameActive,
