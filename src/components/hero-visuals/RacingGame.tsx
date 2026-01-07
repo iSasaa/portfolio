@@ -486,7 +486,7 @@ function CarController({
             const distToPad = positionRef.current && RACE_PAD_POS.distanceTo(new THREE.Vector3(positionRef.current[0], 0, positionRef.current[2]));
 
             // Check if on Pad (< 4 units) and Slow enough (< 5 speed = nearly stopping)
-            // User requested "No Wait Time", so we trigger as soon as they enter effectively.
+            // No wait time for activation
             if (distToPad < 4) {
                 // INSTANT TRIGGER (No Wait)
                 timeStoppedOnPad.current = 0;
@@ -551,7 +551,7 @@ function CarController({
 
         // Z CONSTRAINT (Global Map Limits)
         // Prevent driving into the void. Map is roughly 0 to 230.
-        // TIGHTENED per user request
+
         const MAP_MIN_Z = -5;
         const MAP_MAX_Z = 235;
 
@@ -584,8 +584,7 @@ function CarController({
         // ACTIVATION: WASD Keys
         if (isDriving && !gameActive.current && !isRaceFinished) {
 
-            // USER REQUEST: Auto Scroll to Top on WASD Start
-            // This pulls the user back to the game view if they are scrolled down reading content.
+            // Auto Scroll to Top on WASD Start
             // 1. Teleport Car to Start (Top of page) to sync with Scroll=0
             api.position.set(pos[0], 2, 0);
             api.velocity.set(0, 0, 0);
@@ -1120,7 +1119,6 @@ export function RacingGame({
                     {/* RENDER CHECKPOINTS (CONDITIONAL) */}
                     {isGameActive && (isRaceActive || finishTime) && <CheckpointRenderer currentCheckpoint={currentCheckpoint} theme={resolvedTheme} />}
 
-                    {/* START GATE VISUAL REMOVED PER USER REQUEST */}
 
                     {/* COUNTDOWN OVERLAY (Global) */}
                     {countdown && (
@@ -1144,25 +1142,6 @@ export function RacingGame({
             {/* UI Overlay */}
             {isGameActive && (
                 <>
-                    {/* Top Left: Status */}
-                    <div className="absolute top-4 left-4 font-mono text-sm text-white bg-black/60 px-3 py-1 rounded-lg backdrop-blur-md z-10 w-64">
-                        <div className={isRaceActive ? "text-indigo-400 font-bold" : "text-emerald-400 font-bold"}>
-                            MODE: {isRaceActive ? "RACING" : (finishTime ? "COMPLETED" : "FREE ROAM")}
-                        </div>
-
-                        {isRaceActive ? (
-                            <div className="text-xs text-zinc-400">CHECKPOINT: {currentCheckpoint} / {CHECKPOINTS.length}</div>
-                        ) : !finishTime && (
-                            <div className="text-xs text-zinc-400 animate-pulse">DRIVE TO GREEN GATE TO START</div>
-                        )}
-
-                        {debugInfo && (
-                            <div className="text-[10px] text-zinc-300 mt-2 space-y-1">
-                                { /* Debug content hidden for cleaner look unless needed */}
-                                <div>VEL: X:{debugInfo.velocity[0]} Z:{debugInfo.velocity[2]}</div>
-                            </div>
-                        )}
-                    </div>
 
                     {/* Top Right: Timer */}
                     {isRaceActive && (
@@ -1180,7 +1159,7 @@ export function RacingGame({
                 </div>
             )}
 
-            {/* CAR SELECTOR UI REMOVED - LIFTED TO HERO */}
+            {/* CAR SELECTOR UI */}
 
 
             {/* Leaderboard Modal */}
