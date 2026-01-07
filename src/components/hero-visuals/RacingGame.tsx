@@ -394,25 +394,9 @@ function CarController({
         };
     }, [setCurrentCheckpoint, setIsGameActive, setIsRaceActive, isRaceFinished]);
 
-    // Dynamic Track Scaling - RESTORED for optimized scroll sync
-    const zToPixel = useRef(22);
-    const FINAL_CHECKPOINT_Z = 230; // Updated to match Checkpoint 11 (Ending) depth
-
-    useEffect(() => {
-        const calculateScale = () => {
-            const scrollHeight = document.documentElement.scrollHeight;
-            const viewportHeight = window.innerHeight;
-            const maxScroll = scrollHeight - viewportHeight;
-            if (maxScroll > 0) {
-                const ratio = maxScroll / (FINAL_CHECKPOINT_Z + 10);
-                zToPixel.current = Math.max(ratio, 5);
-            }
-        };
-
-        calculateScale();
-        window.addEventListener('resize', calculateScale);
-        return () => window.removeEventListener('resize', calculateScale);
-    }, []);
+    // Dynamic Track Scaling - REMOVED (No longer syncing scroll)
+    // const zToPixel = useRef(22); 
+    // const FINAL_CHECKPOINT_Z = 230;
 
     // Countdown state lifted to parent
     const timeStoppedOnPad = useRef(0);
@@ -574,9 +558,8 @@ function CarController({
         // Sync Window Scroll (Hybrid Logic)
         // 1. DRIVING MODE: If user is driving (WASD), Car controls Scroll.
         const isDriving = forward || back || left || right;
-        // Calculate scrollZ for passive mode & camera
-        const currentNativeScroll = window.scrollY;
-        const scrollZ = currentNativeScroll / zToPixel.current;
+        // const currentNativeScroll = window.scrollY; // REMOVED
+        // const scrollZ = currentNativeScroll / zToPixel.current; // REMOVED
 
         // --- GAME MODE ACTIVATION STATE MACHINE ---
         // ACTIVATION: WASD Keys
@@ -607,12 +590,8 @@ function CarController({
             // Update Last Known Pos
             lastDrivenPos.current.set(pos[0], 2, pos[2]);
 
-            // Sync Page Scroll to Car Z position when driving (OPTIMIZED)
-            // Limit updates to prevent layout thrashing (1FPS fix)
-            const targetScrollY = pos[2] * zToPixel.current;
-            if (Math.abs(window.scrollY - targetScrollY) > 10) { // 10px threshold
-                window.scrollTo({ top: Math.max(0, targetScrollY), behavior: 'instant' });
-            }
+            // Sync Page Scroll to Car Z position when driving - REMOVED
+            // window.scrollTo(0, Math.max(0, scrollY));
 
             // --- CHECKPOINT / START GATE LOGIC (PRECISE OBB) ---
 
@@ -669,19 +648,23 @@ function CarController({
             // Reset triggered by Mouse/Scroll interaction.
             // document.body.style.overflow = 'auto'; // Handled in useEffect
 
-            // PARALLAX DRIVING EFFECT
-            // Car moves Forward (+Z) as user scrolls, but slower than page.
-            // Result: Car visually "drives" down the track while scrolling up the screen.
+            // PARALLAX REMOVED - Car stays static or resets
+            // If we want the car to stay at start:
+            /*
             const START_POS = [7, 2, 0];
-            const targetZ = scrollZ * 0.5;
+            const targetZ = 0; // scrollZ * 0.5;
 
             api.position.set(START_POS[0], START_POS[1], targetZ);
             api.velocity.set(0, 0, 0);
             api.angularVelocity.set(0, 0, 0);
+            */
 
-            // Reset Rotation (Face Forward)
-            currentRotation.current = Math.PI;
-            if (chassisRef.current) chassisRef.current.rotation.y = Math.PI;
+            // Do nothing physics-wise, let it rest.
+            // Reset Rotation (Face Forward) if desired logic exists, but for now we just leave it.
+
+            // Ensure rotation reset if needed
+            // currentRotation.current = Math.PI;
+            // if (chassisRef.current) chassisRef.current.rotation.y = Math.PI;
 
             hasStarted.current = false;
         }
@@ -693,10 +676,8 @@ function CarController({
         // If Game Active: Camera Follows Car
         // If Passive: Camera tracks Scroll (Car is at Start, but we view where we scroll)
         // --- 3. CAMERA SYNC ---
-        // Camera Z follows Car Z (Active) OR Scroll Z (Passive)
-        // If Game Active: Camera Follows Car
-        // If Passive: Camera tracks Scroll (Car is at Start, but we view where we scroll)
-        const targetZBase = gameActive.current ? pos[2] : scrollZ;
+        // Camera Z follows Car Z (Active) ALWAYS
+        const targetZBase = pos[2];
 
         // Dynamic Camera Transition Logic
         if ((forward || back || left || right) && !isRaceFinished) {
