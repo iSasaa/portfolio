@@ -823,8 +823,8 @@ export function RacingGame({
                     />
 
                     {/* --- FIX CRITIC: TIMESTEP DE FÍSIQUES --- */}
-                    {/* Evita el "Physics Death Spiral" fixant el càlcul a 60fps */}
-                    <Physics gravity={[0, -20, 0]} timeStep={1 / 60}>
+                    {/* Canviat timeStep a stepSize per arreglar error de TypeScript */}
+                    <Physics gravity={[0, -20, 0]} stepSize={1 / 60}>
                         <CarController
                             currentCheckpoint={currentCheckpoint}
                             setCurrentCheckpoint={setCurrentCheckpoint}
