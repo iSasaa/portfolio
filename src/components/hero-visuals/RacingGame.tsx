@@ -40,39 +40,22 @@ const CHECKPOINTS = [
     { id: 16, x: 0, z: 20, color: "#FBBF24", label: "FINISH", isFinal: true, segmentType: 'straight', rotationOffset: 5 * (Math.PI / 180) },
 ];
 
-// --- COMPONENTS ---
+// --- COMPONENTS (Visuals) ---
 
 function CheckpointGate({ position, rotation, status, color, isFinal, glowIntensity = 0 }: { position: [number, number, number], rotation: number, status: 'active' | 'next' | 'hidden' | 'completed', color: string, isFinal?: boolean, glowIntensity?: number }) {
     if (status === 'hidden' || status === 'completed') return null;
-
     const isActive = status === 'active';
     const width = 15;
-
     return (
         <group position={[position[0], 0, position[2]]} rotation={[0, rotation, 0]}>
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.1, 0]}>
                 <planeGeometry args={[width, isFinal ? 4 : 1.5]} />
-                <meshStandardMaterial
-                    color={color}
-                    emissive={color}
-                    emissiveIntensity={isActive ? 2 : 0.5}
-                    toneMapped={false}
-                    transparent
-                    opacity={isActive ? 0.9 : 0.4}
-                    side={THREE.DoubleSide}
-                />
+                <meshStandardMaterial color={color} emissive={color} emissiveIntensity={isActive ? 2 : 0.5} toneMapped={false} transparent opacity={isActive ? 0.9 : 0.4} side={THREE.DoubleSide} />
             </mesh>
-
             {isActive && (
                 <>
-                    <mesh position={[-width / 2, 2, 0]}>
-                        <boxGeometry args={[0.3, 4, 0.3]} />
-                        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={2} />
-                    </mesh>
-                    <mesh position={[width / 2, 2, 0]}>
-                        <boxGeometry args={[0.3, 4, 0.3]} />
-                        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={2} />
-                    </mesh>
+                    <mesh position={[-width / 2, 2, 0]}><boxGeometry args={[0.3, 4, 0.3]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={2} /></mesh>
+                    <mesh position={[width / 2, 2, 0]}><boxGeometry args={[0.3, 4, 0.3]} /><meshStandardMaterial color={color} emissive={color} emissiveIntensity={2} /></mesh>
                 </>
             )}
         </group>
@@ -83,52 +66,17 @@ function VolumetricBeam({ position, rotation = [Math.PI / 2, 0, 0], scale = 1, c
     return (
         <mesh position={position} rotation={rotation as any}>
             <cylinderGeometry args={[0.1 * scale, 1.5 * scale, 6, 32, 1, true]} />
-            <meshBasicMaterial
-                color={color}
-                transparent
-                opacity={0.15}
-                blending={THREE.AdditiveBlending}
-                depthWrite={false}
-                side={THREE.DoubleSide}
-            />
+            <meshBasicMaterial color={color} transparent opacity={0.15} blending={THREE.AdditiveBlending} depthWrite={false} side={THREE.DoubleSide} />
         </mesh>
     );
 }
 
 function SoftUnderglow({ width, length, color, intensity = 1 }: { width: number, length: number, color: string, intensity?: number }) {
-    const uniforms = useMemo(() => ({
-        uColor: { value: new THREE.Color(color) },
-        uOpacity: { value: intensity }
-    }), [color, intensity]);
-
+    const uniforms = useMemo(() => ({ uColor: { value: new THREE.Color(color) }, uOpacity: { value: intensity } }), [color, intensity]);
     return (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
             <planeGeometry args={[width, length]} />
-            <shaderMaterial
-                uniforms={uniforms}
-                vertexShader={`
-                    varying vec2 vUv;
-                    void main() {
-                        vUv = uv;
-                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                    }
-                `}
-                fragmentShader={`
-                    uniform vec3 uColor;
-                    uniform float uOpacity;
-                    varying vec2 vUv;
-                    void main() {
-                        float dx = abs(vUv.x - 0.5) * 2.0;
-                        float dy = abs(vUv.y - 0.5) * 2.0;
-                        float alpha = (1.0 - smoothstep(0.2, 1.0, dx)) * (1.0 - smoothstep(0.2, 1.0, dy));
-                        gl_FragColor = vec4(uColor, alpha * uOpacity);
-                    }
-                `}
-                transparent
-                depthWrite={false}
-                blending={THREE.AdditiveBlending}
-                side={THREE.DoubleSide}
-            />
+            <shaderMaterial uniforms={uniforms} vertexShader={`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`} fragmentShader={`uniform vec3 uColor;uniform float uOpacity;varying vec2 vUv;void main(){float dx=abs(vUv.x-0.5)*2.0;float dy=abs(vUv.y-0.5)*2.0;float alpha=(1.0-smoothstep(0.2,1.0,dx))*(1.0-smoothstep(0.2,1.0,dy));gl_FragColor=vec4(uColor,alpha*uOpacity);}`} transparent depthWrite={false} blending={THREE.AdditiveBlending} side={THREE.DoubleSide} />
         </mesh>
     );
 }
@@ -136,23 +84,10 @@ function SoftUnderglow({ width, length, color, intensity = 1 }: { width: number,
 function GuideArrow({ position }: { position?: [number, number, number] }) {
     const arrowShape = useMemo(() => {
         const shape = new THREE.Shape();
-        const w = 0.4;
-        const l = 1.0;
-        const hw = 0.8;
-        const hl = 0.8;
-
-        shape.moveTo(-w, 0);
-        shape.lineTo(-w, l);
-        shape.lineTo(-hw, l);
-        shape.lineTo(0, l + hl);
-        shape.lineTo(hw, l);
-        shape.lineTo(w, l);
-        shape.lineTo(w, 0);
-        shape.lineTo(-w, 0);
-
+        const w = 0.4; const l = 1.0; const hw = 0.8; const hl = 0.8;
+        shape.moveTo(-w, 0); shape.lineTo(-w, l); shape.lineTo(-hw, l); shape.lineTo(0, l + hl); shape.lineTo(hw, l); shape.lineTo(w, l); shape.lineTo(w, 0); shape.lineTo(-w, 0);
         return shape;
     }, []);
-
     return (
         <group position={position}>
             <mesh rotation={[-Math.PI / 2, 0, Math.PI]} position={[0, 0, 3.5]}>
@@ -166,91 +101,28 @@ function GuideArrow({ position }: { position?: [number, number, number] }) {
 function RaceStartPad({ position }: { position: [number, number, number] }) {
     const group = useRef<THREE.Group>(null);
     const coreRef = useRef<THREE.Mesh>(null);
-
     useFrame((state) => {
         const t = state.clock.getElapsedTime();
-        if (group.current) {
-            group.current.rotation.y = t * 0.2;
-        }
-        if (coreRef.current) {
-            coreRef.current.rotation.x = t;
-            coreRef.current.rotation.z = t * 0.5;
-            coreRef.current.position.y = 1.5 + Math.sin(t * 2) * 0.3;
-        }
+        if (group.current) group.current.rotation.y = t * 0.2;
+        if (coreRef.current) { coreRef.current.rotation.x = t; coreRef.current.rotation.z = t * 0.5; coreRef.current.position.y = 1.5 + Math.sin(t * 2) * 0.3; }
     });
-
     return (
         <group position={position}>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-                <circleGeometry args={[5, 6]} />
-                <meshBasicMaterial color="#F59E0B" transparent opacity={0.2} />
-            </mesh>
-
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}><circleGeometry args={[5, 6]} /><meshBasicMaterial color="#F59E0B" transparent opacity={0.2} /></mesh>
             <group ref={group}>
-                <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.1, 0]}>
-                    <ringGeometry args={[4.5, 4.8, 6]} />
-                    <meshBasicMaterial color="#FBBF24" side={THREE.DoubleSide} />
-                </mesh>
-                <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.12, 0]} scale={0.8}>
-                    <ringGeometry args={[4.5, 4.6, 6]} />
-                    <meshBasicMaterial color="#ffffff" side={THREE.DoubleSide} transparent opacity={0.5} />
-                </mesh>
+                <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.1, 0]}><ringGeometry args={[4.5, 4.8, 6]} /><meshBasicMaterial color="#FBBF24" side={THREE.DoubleSide} /></mesh>
+                <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.12, 0]} scale={0.8}><ringGeometry args={[4.5, 4.6, 6]} /><meshBasicMaterial color="#ffffff" side={THREE.DoubleSide} transparent opacity={0.5} /></mesh>
             </group>
-
-            <mesh ref={coreRef} position={[0, 1.5, 0]}>
-                <octahedronGeometry args={[1, 0]} />
-                <meshStandardMaterial
-                    color="#FBBF24"
-                    emissive="#F59E0B"
-                    emissiveIntensity={4}
-                    wireframe
-                />
-            </mesh>
-
-            <mesh position={[0, 1.5, 0]}>
-                <octahedronGeometry args={[0.5, 0]} />
-                <meshBasicMaterial color="#ffffff" />
-            </mesh>
-
-            <Sparkles
-                count={30}
-                scale={[6, 4, 6]}
-                size={4}
-                speed={0.4}
-                opacity={0.5}
-                color="#FBBF24"
-                position={[0, 2, 0]}
-            />
-
-            <mesh position={[0, 5, 0]}>
-                <cylinderGeometry args={[3.5, 3.5, 10, 6, 1, true]} />
-                <meshStandardMaterial
-                    color="#FBBF24"
-                    transparent
-                    opacity={0.05}
-                    side={THREE.DoubleSide}
-                    depthWrite={false}
-                    blending={THREE.AdditiveBlending}
-                />
-            </mesh>
-
-            <Billboard position={[0, 4, 0]}>
-                <Text
-                    fontSize={1.5}
-                    color="#FFFFFF"
-                    anchorX="center"
-                    anchorY="middle"
-                    outlineWidth={0.05}
-                    outlineColor="#F59E0B"
-                >
-                    START
-                </Text>
-            </Billboard>
+            <mesh ref={coreRef} position={[0, 1.5, 0]}><octahedronGeometry args={[1, 0]} /><meshStandardMaterial color="#FBBF24" emissive="#F59E0B" emissiveIntensity={4} wireframe /></mesh>
+            <mesh position={[0, 1.5, 0]}><octahedronGeometry args={[0.5, 0]} /><meshBasicMaterial color="#ffffff" /></mesh>
+            <Sparkles count={30} scale={[6, 4, 6]} size={4} speed={0.4} opacity={0.5} color="#FBBF24" position={[0, 2, 0]} />
+            <mesh position={[0, 5, 0]}><cylinderGeometry args={[3.5, 3.5, 10, 6, 1, true]} /><meshStandardMaterial color="#FBBF24" transparent opacity={0.05} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} /></mesh>
+            <Billboard position={[0, 4, 0]}><Text fontSize={1.5} color="#FFFFFF" anchorX="center" anchorY="middle" outlineWidth={0.05} outlineColor="#F59E0B">START</Text></Billboard>
         </group>
     );
 }
 
-// --- CAR CONTROLLER (CORREGIT) ---
+// --- CAR CONTROLLER (SOLUCIONADO: VELOCIDAD Y GITHUB PAGES) ---
 
 function CarController({
     currentCheckpoint,
@@ -284,8 +156,10 @@ function CarController({
         position: [7, 2, 0],
         args: [1],
         fixedRotation: true,
-        linearDamping: 0.8,
-        material: { friction: 0.0, restitution: 0 }
+        // DAMPING REDUCIDO: 0.5 permite que el coche se mueva libremente.
+        // (Antes estaba en 0.8 y actuaba como freno de mano constante)
+        linearDamping: 0.5,
+        material: { friction: 0.05, restitution: 0 }
     }));
 
     const chassisRef = useRef<THREE.Group>(null);
@@ -329,7 +203,6 @@ function CarController({
     useEffect(() => {
         const handleInteraction = () => {
             if (isRaceFinished) return;
-
             if (gameActive.current) {
                 gameActive.current = false;
                 setIsGameActive(false);
@@ -378,12 +251,9 @@ function CarController({
         api.position.set(0, 2, 20);
         api.velocity.set(0, 0, 0);
         api.angularVelocity.set(0, 0, 0);
-
         currentRotation.current = -Math.PI / 2;
         if (chassisRef.current) chassisRef.current.rotation.y = -Math.PI / 2;
-
         setCountdown(3);
-
         let count = 3;
         const interval = setInterval(() => {
             count--;
@@ -402,197 +272,22 @@ function CarController({
 
     const lastScrolledY = useRef(0);
 
+    // --- LIMITADOR DE FRAMES PARA ESTABILIDAD FÍSICA ---
+    const timeAccumulator = useRef(0);
+    const FIXED_TIME_STEP = 1 / 60; // 60 FPS fijos para la lógica
+
     useFrame((state, delta) => {
+        // --- 1. VISUALES (Suavidad máxima) ---
         let { forward, back, left, right, reset } = getKeys();
 
         if (isRaceFinished || countdown !== null) {
-            forward = false;
-            back = false;
-            left = false;
-            right = false;
-            reset = false;
+            forward = false; back = false; left = false; right = false; reset = false;
         }
-
-        const startDrift = getKeys().drift;
-        const MAX_SPEED = 35;
-        const ACCEL = 0.8;
-        const STEER_SPEED = 0.025;
-        const DRIFT_FACTOR = startDrift ? 0.985 : 0.90;
-        const DRAG = 0.92;
-
-        const currentVel = new THREE.Vector3(velocity.current[0], 0, velocity.current[2]);
-        const speed = currentVel.length();
-
-        if (!isRaceActive && !countdown && !isRaceFinished) {
-            const distToPad = positionRef.current && RACE_PAD_POS.distanceTo(new THREE.Vector3(positionRef.current[0], 0, positionRef.current[2]));
-            if (distToPad < 4) {
-                timeStoppedOnPad.current = 0;
-                startCountdownSequence();
-            }
-        }
-
-        const turnMultiplier = THREE.MathUtils.clamp(speed / 8, 0, 1);
-        if (left) currentRotation.current += STEER_SPEED * turnMultiplier;
-        if (right) currentRotation.current -= STEER_SPEED * turnMultiplier;
-
-        const forwardVector = new THREE.Vector3(
-            -Math.sin(currentRotation.current), 0, -Math.cos(currentRotation.current)
-        );
-        const rightVector = new THREE.Vector3(
-            -Math.sin(currentRotation.current + Math.PI / 2), 0, -Math.cos(currentRotation.current + Math.PI / 2)
-        );
-
-        let forwardSpeed = currentVel.dot(forwardVector);
-        let sideSpeed = currentVel.dot(rightVector);
-
-        if (forward) forwardSpeed += ACCEL;
-        else if (back) forwardSpeed -= ACCEL;
-        else forwardSpeed *= DRAG;
-
-        forwardSpeed = THREE.MathUtils.clamp(forwardSpeed, -MAX_SPEED, MAX_SPEED);
-        sideSpeed *= DRIFT_FACTOR;
-
-        const newVel = forwardVector.multiplyScalar(forwardSpeed).add(rightVector.multiplyScalar(sideSpeed));
-        api.velocity.set(newVel.x, velocity.current[1], newVel.z);
 
         const pos = positionRef.current;
-        const currentViewport = state.viewport.getCurrentViewport(state.camera, new THREE.Vector3(0, 2, pos[2]));
-        const visibleWidth = currentViewport.width;
-        const SIDE_MARGIN = 0.5;
-        const maxX = (visibleWidth / 2) - SIDE_MARGIN;
-
-        if (Math.abs(pos[0]) > maxX) {
-            const clampedX = THREE.MathUtils.clamp(pos[0], -maxX, maxX);
-            api.position.set(clampedX, pos[1], pos[2]);
-            if ((pos[0] > 0 && velocity.current[0] > 0) || (pos[0] < 0 && velocity.current[0] < 0)) {
-                api.velocity.set(-velocity.current[0] * 0.6, velocity.current[1], velocity.current[2]);
-            }
-        }
-
-        const MAP_MIN_Z = -5;
-        const MAP_MAX_Z = 235;
-
-        if (pos[2] < MAP_MIN_Z || pos[2] > MAP_MAX_Z) {
-            const clampedZ = THREE.MathUtils.clamp(pos[2], MAP_MIN_Z, MAP_MAX_Z);
-            api.position.set(pos[0], pos[1], clampedZ);
-            if ((pos[2] <= MAP_MIN_Z && velocity.current[2] < 0) || (pos[2] >= MAP_MAX_Z && velocity.current[2] > 0)) {
-                api.velocity.set(velocity.current[0], velocity.current[1], -velocity.current[2] * 1.5);
-            }
-        }
-
         const scrollY = pos[2] * zToPixel.current;
         const currentNativeScroll = window.scrollY;
         const scrollZ = currentNativeScroll / zToPixel.current;
-
-        const isDriving = forward || back || left || right;
-
-        if (isDriving && !gameActive.current && !isRaceFinished) {
-            api.position.set(pos[0], 2, 0);
-            api.velocity.set(0, 0, 0);
-            api.angularVelocity.set(0, 0, 0);
-
-            window.scrollTo({ top: 0, behavior: 'instant' });
-            lastScrolledY.current = 0;
-
-            gameActive.current = true;
-            setIsGameActive(true);
-            hasStarted.current = true;
-        }
-
-        if (gameActive.current) {
-            document.body.style.overflow = 'hidden';
-            lastDrivenPos.current.set(pos[0], 2, pos[2]);
-
-            // --- OPTIMITZACIÓ SCROLL ---
-            if (Math.abs(currentNativeScroll - scrollY) > 2) {
-                window.scrollTo(0, Math.max(0, scrollY));
-            }
-
-            const checkTrigger = (targetCpIndex: number, isStartGate: boolean) => {
-                const denseIdx = trackData.indices[targetCpIndex];
-                if (denseIdx === undefined || !trackData.points) return false;
-
-                const cpPos = trackData.points[denseIdx];
-                const len = trackData.points.length;
-
-                const prevP = trackData.points[(denseIdx - 1 + len) % len];
-                const nextP = trackData.points[(denseIdx + 1) % len];
-                const tangent = new THREE.Vector3().subVectors(nextP, prevP).normalize();
-
-                const carVec = new THREE.Vector3(pos[0], 0, pos[2]);
-                const toCar = new THREE.Vector3().subVectors(carVec, cpPos);
-
-                const distLong = toCar.dot(tangent);
-                const distLatVec = toCar.clone().sub(tangent.clone().multiplyScalar(distLong));
-                const distLat = distLatVec.length();
-
-                if (Math.abs(distLong) < 1.2 && distLat < 8) {
-                    return true;
-                }
-                return false;
-            };
-
-            if (isRaceActive) {
-                if (currentCheckpoint < CHECKPOINTS.length) {
-                    if (checkTrigger(currentCheckpoint, false)) {
-                        if (currentCheckpoint === CHECKPOINTS.length - 1) {
-                            onRaceFinish();
-                        } else {
-                            setCurrentCheckpoint(currentCheckpoint + 1);
-                        }
-                    }
-                }
-            }
-        } else {
-            document.body.style.overflow = 'auto';
-
-            const START_POS = [7, 2, 0];
-            const targetZ = scrollZ * 0.5;
-
-            api.position.set(START_POS[0], START_POS[1], targetZ);
-            api.velocity.set(0, 0, 0);
-            api.angularVelocity.set(0, 0, 0);
-
-            currentRotation.current = Math.PI;
-            if (chassisRef.current) chassisRef.current.rotation.y = Math.PI;
-
-            hasStarted.current = false;
-        }
-
-        const targetZBase = gameActive.current ? pos[2] : scrollZ;
-
-        if ((forward || back || left || right) && !isRaceFinished) {
-            hasStarted.current = true;
-        }
-
-        const cinematicOffset = new THREE.Vector3(20, 5, 20);
-        const gameplayOffset = new THREE.Vector3(0, 80, 50);
-
-        const targetOffset = hasStarted.current ? gameplayOffset : cinematicOffset;
-        const desiredX = hasStarted.current ? 0 : targetOffset.x + pos[0];
-
-        const targetCamPos = new THREE.Vector3(
-            desiredX,
-            pos[1] + targetOffset.y,
-            targetZBase + targetOffset.z
-        );
-
-        if (gameActive.current) {
-            state.camera.position.lerp(targetCamPos, 0.1);
-        } else {
-            state.camera.position.copy(targetCamPos);
-        }
-        state.camera.lookAt(0, 0, targetZBase);
-
-        const CINEMATIC_ZOOM = 75;
-        const GAMEPLAY_ZOOM = baseZoom;
-
-        const targetZoom = hasStarted.current ? GAMEPLAY_ZOOM : CINEMATIC_ZOOM;
-
-        if (state.camera instanceof THREE.OrthographicCamera) {
-            state.camera.zoom = THREE.MathUtils.lerp(state.camera.zoom, targetZoom, 0.05);
-            state.camera.updateProjectionMatrix();
-        }
 
         if (chassisRef.current) {
             chassisRef.current.rotation.order = 'YXZ';
@@ -603,11 +298,161 @@ function CarController({
             chassisRef.current.rotation.x = THREE.MathUtils.lerp(chassisRef.current.rotation.x, pitch, 0.1);
         }
 
+        const targetZBase = gameActive.current ? pos[2] : scrollZ;
+        if ((forward || back || left || right) && !isRaceFinished) {
+            hasStarted.current = true;
+        }
+        const cinematicOffset = new THREE.Vector3(20, 5, 20);
+        const gameplayOffset = new THREE.Vector3(0, 80, 50);
+        const targetOffset = hasStarted.current ? gameplayOffset : cinematicOffset;
+        const desiredX = hasStarted.current ? 0 : targetOffset.x + pos[0];
+        const targetCamPos = new THREE.Vector3(desiredX, pos[1] + targetOffset.y, targetZBase + targetOffset.z);
+
+        if (gameActive.current) state.camera.position.lerp(targetCamPos, 0.1);
+        else state.camera.position.copy(targetCamPos);
+        state.camera.lookAt(0, 0, targetZBase);
+
+        const CINEMATIC_ZOOM = 75;
+        const GAMEPLAY_ZOOM = baseZoom;
+        const targetZoom = hasStarted.current ? GAMEPLAY_ZOOM : CINEMATIC_ZOOM;
+        if (state.camera instanceof THREE.OrthographicCamera) {
+            state.camera.zoom = THREE.MathUtils.lerp(state.camera.zoom, targetZoom, 0.05);
+            state.camera.updateProjectionMatrix();
+        }
+
         if (arrowRef.current && isRaceActive && currentCheckpoint < CHECKPOINTS.length) {
             const target = CHECKPOINTS[currentCheckpoint];
             arrowRef.current.lookAt(target.x, pos[1], target.z);
         }
 
+        // --- 2. LÓGICA DE FÍSICA (Limitada a 60hz) ---
+        timeAccumulator.current += delta;
+
+        if (timeAccumulator.current >= FIXED_TIME_STEP) {
+            timeAccumulator.current = 0; // Reiniciar contador
+
+            const startDrift = getKeys().drift;
+            const MAX_SPEED = 45; // Aumentada velocidad
+            const ACCEL = 1.2; // Aumentada aceleración
+            const STEER_SPEED = 0.035;
+            const DRIFT_FACTOR = startDrift ? 0.98 : 0.92;
+            const DRAG = 0.95;
+
+            const currentVel = new THREE.Vector3(velocity.current[0], 0, velocity.current[2]);
+            const speed = currentVel.length();
+
+            if (!isRaceActive && !countdown && !isRaceFinished) {
+                const distToPad = positionRef.current && RACE_PAD_POS.distanceTo(new THREE.Vector3(positionRef.current[0], 0, positionRef.current[2]));
+                if (distToPad < 4) {
+                    timeStoppedOnPad.current = 0;
+                    startCountdownSequence();
+                }
+            }
+
+            const turnMultiplier = THREE.MathUtils.clamp(speed / 8, 0, 1);
+            if (left) currentRotation.current += STEER_SPEED * turnMultiplier;
+            if (right) currentRotation.current -= STEER_SPEED * turnMultiplier;
+
+            const forwardVector = new THREE.Vector3(-Math.sin(currentRotation.current), 0, -Math.cos(currentRotation.current));
+            const rightVector = new THREE.Vector3(-Math.sin(currentRotation.current + Math.PI / 2), 0, -Math.cos(currentRotation.current + Math.PI / 2));
+
+            let forwardSpeed = currentVel.dot(forwardVector);
+            let sideSpeed = currentVel.dot(rightVector);
+
+            if (forward) forwardSpeed += ACCEL;
+            else if (back) forwardSpeed -= ACCEL;
+            else forwardSpeed *= DRAG;
+
+            forwardSpeed = THREE.MathUtils.clamp(forwardSpeed, -MAX_SPEED, MAX_SPEED);
+            sideSpeed *= DRIFT_FACTOR;
+
+            const newVel = forwardVector.multiplyScalar(forwardSpeed).add(rightVector.multiplyScalar(sideSpeed));
+
+            // Aplicar velocidad al motor físico
+            api.velocity.set(newVel.x, velocity.current[1], newVel.z);
+
+            // Límites del mapa
+            const currentViewport = state.viewport.getCurrentViewport(state.camera, new THREE.Vector3(0, 2, pos[2]));
+            const visibleWidth = currentViewport.width;
+            const maxX = (visibleWidth / 2) - 0.5;
+            if (Math.abs(pos[0]) > maxX) {
+                const clampedX = THREE.MathUtils.clamp(pos[0], -maxX, maxX);
+                api.position.set(clampedX, pos[1], pos[2]);
+                if ((pos[0] > 0 && velocity.current[0] > 0) || (pos[0] < 0 && velocity.current[0] < 0)) {
+                    api.velocity.set(-velocity.current[0] * 0.5, velocity.current[1], velocity.current[2]);
+                }
+            }
+
+            const MAP_MIN_Z = -5;
+            const MAP_MAX_Z = 235;
+            if (pos[2] < MAP_MIN_Z || pos[2] > MAP_MAX_Z) {
+                const clampedZ = THREE.MathUtils.clamp(pos[2], MAP_MIN_Z, MAP_MAX_Z);
+                api.position.set(pos[0], pos[1], clampedZ);
+                if ((pos[2] <= MAP_MIN_Z && velocity.current[2] < 0) || (pos[2] >= MAP_MAX_Z && velocity.current[2] > 0)) {
+                    api.velocity.set(velocity.current[0], velocity.current[1], -velocity.current[2] * 1.5);
+                }
+            }
+
+            const isDriving = forward || back || left || right;
+            if (isDriving && !gameActive.current && !isRaceFinished) {
+                api.position.set(pos[0], 2, 0);
+                api.velocity.set(0, 0, 0);
+                api.angularVelocity.set(0, 0, 0);
+                window.scrollTo({ top: 0, behavior: 'instant' });
+                lastScrolledY.current = 0;
+                gameActive.current = true;
+                setIsGameActive(true);
+                hasStarted.current = true;
+            }
+
+            if (gameActive.current) {
+                document.body.style.overflow = 'hidden';
+                lastDrivenPos.current.set(pos[0], 2, pos[2]);
+
+                if (Math.abs(currentNativeScroll - scrollY) > 2) {
+                    window.scrollTo(0, Math.max(0, scrollY));
+                }
+
+                const checkTrigger = (targetCpIndex: number) => {
+                    const denseIdx = trackData.indices[targetCpIndex];
+                    if (denseIdx === undefined || !trackData.points) return false;
+                    const cpPos = trackData.points[denseIdx];
+                    const len = trackData.points.length;
+                    const prevP = trackData.points[(denseIdx - 1 + len) % len];
+                    const nextP = trackData.points[(denseIdx + 1) % len];
+                    const tangent = new THREE.Vector3().subVectors(nextP, prevP).normalize();
+                    const carVec = new THREE.Vector3(pos[0], 0, pos[2]);
+                    const toCar = new THREE.Vector3().subVectors(carVec, cpPos);
+                    const distLong = toCar.dot(tangent);
+                    const distLatVec = toCar.clone().sub(tangent.clone().multiplyScalar(distLong));
+                    const distLat = distLatVec.length();
+                    if (Math.abs(distLong) < 1.2 && distLat < 8) return true;
+                    return false;
+                };
+
+                if (isRaceActive) {
+                    if (currentCheckpoint < CHECKPOINTS.length) {
+                        if (checkTrigger(currentCheckpoint)) {
+                            if (currentCheckpoint === CHECKPOINTS.length - 1) {
+                                onRaceFinish();
+                            } else {
+                                setCurrentCheckpoint(currentCheckpoint + 1);
+                            }
+                        }
+                    }
+                }
+            } else {
+                document.body.style.overflow = 'auto';
+                const START_POS = [7, 2, 0];
+                const targetZ = scrollZ * 0.5;
+                api.position.set(START_POS[0], START_POS[1], targetZ);
+                api.velocity.set(0, 0, 0);
+                api.angularVelocity.set(0, 0, 0);
+                currentRotation.current = Math.PI;
+                if (chassisRef.current) chassisRef.current.rotation.y = Math.PI;
+                hasStarted.current = false;
+            }
+        }
     });
 
     return (
@@ -615,7 +460,6 @@ function CarController({
             <group ref={chassisRef} position={[0, -0.4, 0]}>
                 <CyberSportsCar variant={selectedCar} />
             </group>
-
             {gameActive.current && isRaceActive && currentCheckpoint < CHECKPOINTS.length && (
                 <group ref={arrowRef} position={[0, 0.2, 0]}>
                     <GuideArrow />
@@ -809,7 +653,7 @@ export function RacingGame({
                     gl={{ alpha: true, antialias: false }}
                     style={{ background: 'transparent', pointerEvents: 'none' }}
                 >
-                    {/* DEBUG: Monitor de rendiment (a dalt a l'esquerra) */}
+                    {/* DEBUG: Monitor de rendimiento */}
                     <Stats showPanel={0} className="pointer-events-auto" />
 
                     <OrthographicCamera makeDefault position={[0, 50, 50]} zoom={zoom} near={-100} far={500} />
@@ -822,9 +666,7 @@ export function RacingGame({
                         castShadow={false}
                     />
 
-                    {/* --- FIX CRITIC --- */}
-                    {/* worker={null} és la clau: Desactiva el Web Worker que falla a GitHub Pages (404) */}
-                    {/* i força que les físiques corrin al fil principal, evitant el bloqueig. */}
+                    {/* --- FIX CRÍTICO: worker={null} PARA GITHUB PAGES --- */}
                     {/* @ts-ignore */}
                     <Physics gravity={[0, -20, 0]} stepSize={1 / 60} worker={null}>
                         <CarController
