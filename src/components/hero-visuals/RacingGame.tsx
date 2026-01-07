@@ -613,12 +613,7 @@ function CarController({
             lastDrivenPos.current.set(pos[0], 2, pos[2]);
 
             // Sync Page Scroll to Car Z position when driving
-            // PERFORMANCE FIX: Only scrollTo if significantly changed (> 1px threshold)
-            const targetY = Math.max(0, scrollY);
-            if (Math.abs(targetY - lastScrolledY.current) > 1.0) {
-                window.scrollTo(0, targetY);
-                lastScrolledY.current = targetY;
-            }
+            window.scrollTo(0, Math.max(0, scrollY));
 
             // --- CHECKPOINT / START GATE LOGIC (PRECISE OBB) ---
 
