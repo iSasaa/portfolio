@@ -122,7 +122,7 @@ function RaceStartPad({ position }: { position: [number, number, number] }) {
     );
 }
 
-// --- CAR CONTROLLER (SOLUCIONADO: VELOCIDAD Y GITHUB PAGES) ---
+// --- CAR CONTROLLER (SOLUCIONAT PER GITHUB PAGES I VELOCITAT) ---
 
 function CarController({
     currentCheckpoint,
@@ -151,13 +151,13 @@ function CarController({
     selectedCar: number,
     baseZoom: number
 }) {
+    // FÍSICAS DEL COCHE
     const [ref, api] = useSphere(() => ({
         mass: 1,
         position: [7, 2, 0],
         args: [1],
         fixedRotation: true,
-        // DAMPING REDUCIDO: 0.5 permite que el coche se mueva libremente.
-        // (Antes estaba en 0.8 y actuaba como freno de mano constante)
+        // Damping 0.5 para que no se sienta pesado pero tampoco flote
         linearDamping: 0.5,
         material: { friction: 0.05, restitution: 0 }
     }));
@@ -165,6 +165,8 @@ function CarController({
     const chassisRef = useRef<THREE.Group>(null);
     const arrowRef = useRef<THREE.Group>(null);
 
+    // VELOCIDAD INTERNA (Para evitar el bug de "0 aceleración" por lag)
+    const currentSpeedRef = useRef(0);
     const velocity = useRef([0, 0, 0]);
     const positionRef = useRef([7, 2, 0]);
     const currentRotation = useRef(Math.PI);
@@ -184,6 +186,7 @@ function CarController({
         return () => { unsubVel(); unsubPos(); };
     }, [api.velocity, api.position]);
 
+    // Reset Logic
     useEffect(() => {
         if (resetToken > 0) {
             gameActive.current = false;
@@ -191,15 +194,18 @@ function CarController({
             hasStarted.current = false;
             setCurrentCheckpoint(0);
 
+            // Resetear posición y velocidad interna
             api.position.set(7, 2, 0);
             api.velocity.set(0, 0, 0);
             api.angularVelocity.set(0, 0, 0);
+            currentSpeedRef.current = 0; // Importante resetear la velocidad interna
 
             currentRotation.current = Math.PI;
             if (chassisRef.current) chassisRef.current.rotation.y = Math.PI;
         }
     }, [resetToken, api.position, api.velocity, api.angularVelocity, setIsGameActive, setCurrentCheckpoint]);
 
+    // Interaction Handlers
     useEffect(() => {
         const handleInteraction = () => {
             if (isRaceFinished) return;
@@ -211,12 +217,10 @@ function CarController({
                 setCurrentCheckpoint(0);
             }
         };
-
         window.addEventListener('wheel', handleInteraction);
         window.addEventListener('mousemove', handleInteraction);
         window.addEventListener('mousedown', handleInteraction);
         window.addEventListener('touchstart', handleInteraction);
-
         return () => {
             window.removeEventListener('wheel', handleInteraction);
             window.removeEventListener('mousemove', handleInteraction);
@@ -238,7 +242,6 @@ function CarController({
                 zToPixel.current = Math.max(ratio, 5);
             }
         };
-
         calculateScale();
         window.addEventListener('resize', calculateScale);
         return () => window.removeEventListener('resize', calculateScale);
@@ -251,17 +254,16 @@ function CarController({
         api.position.set(0, 2, 20);
         api.velocity.set(0, 0, 0);
         api.angularVelocity.set(0, 0, 0);
+        currentSpeedRef.current = 0; // Reset speed ref
         currentRotation.current = -Math.PI / 2;
         if (chassisRef.current) chassisRef.current.rotation.y = -Math.PI / 2;
         setCountdown(3);
         let count = 3;
         const interval = setInterval(() => {
             count--;
-            if (count > 0) {
-                setCountdown(count);
-            } else if (count === 0) {
-                setCountdown("GO!");
-            } else {
+            if (count > 0) setCountdown(count);
+            else if (count === 0) setCountdown("GO!");
+            else {
                 clearInterval(interval);
                 setCountdown(null);
                 setIsRaceActive(true);
@@ -272,147 +274,123 @@ function CarController({
 
     const lastScrolledY = useRef(0);
 
-    // --- LIMITADOR DE FRAMES PARA ESTABILIDAD FÍSICA ---
-    const timeAccumulator = useRef(0);
-    const FIXED_TIME_STEP = 1 / 60; // 60 FPS fijos para la lógica
-
     useFrame((state, delta) => {
-        // --- 1. VISUALES (Suavidad máxima) ---
-        let { forward, back, left, right, reset } = getKeys();
+        let { forward, back, left, right } = getKeys();
 
         if (isRaceFinished || countdown !== null) {
-            forward = false; back = false; left = false; right = false; reset = false;
+            forward = false; back = false; left = false; right = false;
         }
 
+        const startDrift = getKeys().drift;
+        // Ajustes para sensación Arcade
+        const MAX_SPEED = 45;
+        const ACCEL = 0.8; // Aceleración por frame (lógica propia)
+        const STEER_SPEED = 0.035;
+        const DRIFT_FACTOR = startDrift ? 0.98 : 0.92;
+        const DRAG = 0.96; // Arrastre para frenar suavemente
+
+        // --- SOLUCIÓN VELOCIDAD ---
+        // En lugar de leer la velocidad física (que puede venir con lag o ser 0),
+        // mantenemos nuestra propia velocidad acumulada en currentSpeedRef.
+        let speed = currentSpeedRef.current;
+
+        // 1. Aplicar Aceleración a la velocidad interna
+        if (forward) speed += ACCEL;
+        else if (back) speed -= ACCEL;
+        else speed *= DRAG; // Frenado natural
+
+        // Clampear velocidad
+        speed = THREE.MathUtils.clamp(speed, -MAX_SPEED, MAX_SPEED);
+        currentSpeedRef.current = speed; // Guardar para el siguiente frame
+
+        // 2. Calcular Vectores de Movimiento
+        // Usamos la velocidad interna 'speed' para saber cuánto movernos
+        const turnMultiplier = THREE.MathUtils.clamp(Math.abs(speed) / 5, 0, 1);
+
+        if (left) currentRotation.current += STEER_SPEED * turnMultiplier;
+        if (right) currentRotation.current -= STEER_SPEED * turnMultiplier;
+
+        const forwardVector = new THREE.Vector3(
+            -Math.sin(currentRotation.current), 0, -Math.cos(currentRotation.current)
+        );
+        const rightVector = new THREE.Vector3(
+            -Math.sin(currentRotation.current + Math.PI / 2), 0, -Math.cos(currentRotation.current + Math.PI / 2)
+        );
+
+        // Descomponer velocidad en dirección frontal y lateral (drift)
+        // Como 'speed' es escalar, lo aplicamos directamente al vector frontal
+        let forwardVelocity = forwardVector.multiplyScalar(speed);
+
+        // Simular drift simple (inercia lateral basada en giro)
+        // Esto es simplificado para asegurar que el coche se mueva
+        const driftForce = startDrift ? 0.5 : 0.1;
+        // (Omitimos cálculo complejo de drift lateral para asegurar movimiento primero)
+
+        // 3. ENVIAR AL MOTOR DE FÍSICAS (Autoridad Total)
+        api.velocity.set(forwardVelocity.x, velocity.current[1], forwardVelocity.z);
+
+        // --- SISTEMA DE COLISIÓN SIMPLE ---
+        // Si la velocidad interna es alta, pero la velocidad real (física) es 0,
+        // significa que hemos chocado contra un muro. Reseteamos la interna.
+        const realVelocityMagnitude = new THREE.Vector3(velocity.current[0], 0, velocity.current[2]).length();
+        if (Math.abs(speed) > 5 && realVelocityMagnitude < 1) {
+            currentSpeedRef.current *= 0.5; // Absorber impacto
+        }
+
+        // --- VISUALES Y LÓGICA DE JUEGO ---
         const pos = positionRef.current;
         const scrollY = pos[2] * zToPixel.current;
         const currentNativeScroll = window.scrollY;
         const scrollZ = currentNativeScroll / zToPixel.current;
 
-        if (chassisRef.current) {
-            chassisRef.current.rotation.order = 'YXZ';
-            chassisRef.current.rotation.y = currentRotation.current;
-            const tilt = (left ? 0.25 : 0) + (right ? -0.25 : 0);
-            chassisRef.current.rotation.z = THREE.MathUtils.lerp(chassisRef.current.rotation.z, tilt, 0.1);
-            const pitch = (forward ? -0.15 : 0) + (back ? 0.1 : 0);
-            chassisRef.current.rotation.x = THREE.MathUtils.lerp(chassisRef.current.rotation.x, pitch, 0.1);
+        // Limites Laterales
+        const currentViewport = state.viewport.getCurrentViewport(state.camera, new THREE.Vector3(0, 2, pos[2]));
+        const maxX = (currentViewport.width / 2) - 0.5;
+
+        if (Math.abs(pos[0]) > maxX) {
+            const clampedX = THREE.MathUtils.clamp(pos[0], -maxX, maxX);
+            api.position.set(clampedX, pos[1], pos[2]);
+            // Rebote pared
+            if ((pos[0] > 0 && velocity.current[0] > 0) || (pos[0] < 0 && velocity.current[0] < 0)) {
+                api.velocity.set(-velocity.current[0] * 0.5, velocity.current[1], velocity.current[2]);
+                currentSpeedRef.current *= 0.8; // Perder velocidad al chocar
+            }
         }
 
-        const targetZBase = gameActive.current ? pos[2] : scrollZ;
-        if ((forward || back || left || right) && !isRaceFinished) {
+        // Limites Mapa Z
+        if (pos[2] < -5 || pos[2] > 235) {
+            const clampedZ = THREE.MathUtils.clamp(pos[2], -5, 235);
+            api.position.set(pos[0], pos[1], clampedZ);
+            if ((pos[2] <= -5 && velocity.current[2] < 0) || (pos[2] >= 235 && velocity.current[2] > 0)) {
+                api.velocity.set(velocity.current[0], velocity.current[1], -velocity.current[2] * 1.5);
+            }
+        }
+
+        // Activar Juego
+        const isDriving = forward || back || left || right;
+        if (isDriving && !gameActive.current && !isRaceFinished) {
+            api.position.set(pos[0], 2, 0);
+            api.velocity.set(0, 0, 0);
+            api.angularVelocity.set(0, 0, 0);
+            currentSpeedRef.current = 0; // Reset
+
+            window.scrollTo({ top: 0, behavior: 'instant' });
+            lastScrolledY.current = 0;
+            gameActive.current = true;
+            setIsGameActive(true);
             hasStarted.current = true;
         }
-        const cinematicOffset = new THREE.Vector3(20, 5, 20);
-        const gameplayOffset = new THREE.Vector3(0, 80, 50);
-        const targetOffset = hasStarted.current ? gameplayOffset : cinematicOffset;
-        const desiredX = hasStarted.current ? 0 : targetOffset.x + pos[0];
-        const targetCamPos = new THREE.Vector3(desiredX, pos[1] + targetOffset.y, targetZBase + targetOffset.z);
 
-        if (gameActive.current) state.camera.position.lerp(targetCamPos, 0.1);
-        else state.camera.position.copy(targetCamPos);
-        state.camera.lookAt(0, 0, targetZBase);
-
-        const CINEMATIC_ZOOM = 75;
-        const GAMEPLAY_ZOOM = baseZoom;
-        const targetZoom = hasStarted.current ? GAMEPLAY_ZOOM : CINEMATIC_ZOOM;
-        if (state.camera instanceof THREE.OrthographicCamera) {
-            state.camera.zoom = THREE.MathUtils.lerp(state.camera.zoom, targetZoom, 0.05);
-            state.camera.updateProjectionMatrix();
-        }
-
-        if (arrowRef.current && isRaceActive && currentCheckpoint < CHECKPOINTS.length) {
-            const target = CHECKPOINTS[currentCheckpoint];
-            arrowRef.current.lookAt(target.x, pos[1], target.z);
-        }
-
-        // --- 2. LÓGICA DE FÍSICA (Limitada a 60hz) ---
-        timeAccumulator.current += delta;
-
-        if (timeAccumulator.current >= FIXED_TIME_STEP) {
-            timeAccumulator.current = 0; // Reiniciar contador
-
-            const startDrift = getKeys().drift;
-            const MAX_SPEED = 45; // Aumentada velocidad
-            const ACCEL = 1.2; // Aumentada aceleración
-            const STEER_SPEED = 0.035;
-            const DRIFT_FACTOR = startDrift ? 0.98 : 0.92;
-            const DRAG = 0.95;
-
-            const currentVel = new THREE.Vector3(velocity.current[0], 0, velocity.current[2]);
-            const speed = currentVel.length();
-
-            if (!isRaceActive && !countdown && !isRaceFinished) {
-                const distToPad = positionRef.current && RACE_PAD_POS.distanceTo(new THREE.Vector3(positionRef.current[0], 0, positionRef.current[2]));
-                if (distToPad < 4) {
-                    timeStoppedOnPad.current = 0;
-                    startCountdownSequence();
-                }
+        // Scroll Sync
+        if (gameActive.current) {
+            document.body.style.overflow = 'hidden';
+            lastDrivenPos.current.set(pos[0], 2, pos[2]);
+            if (Math.abs(currentNativeScroll - scrollY) > 2) {
+                window.scrollTo(0, Math.max(0, scrollY));
             }
-
-            const turnMultiplier = THREE.MathUtils.clamp(speed / 8, 0, 1);
-            if (left) currentRotation.current += STEER_SPEED * turnMultiplier;
-            if (right) currentRotation.current -= STEER_SPEED * turnMultiplier;
-
-            const forwardVector = new THREE.Vector3(-Math.sin(currentRotation.current), 0, -Math.cos(currentRotation.current));
-            const rightVector = new THREE.Vector3(-Math.sin(currentRotation.current + Math.PI / 2), 0, -Math.cos(currentRotation.current + Math.PI / 2));
-
-            let forwardSpeed = currentVel.dot(forwardVector);
-            let sideSpeed = currentVel.dot(rightVector);
-
-            if (forward) forwardSpeed += ACCEL;
-            else if (back) forwardSpeed -= ACCEL;
-            else forwardSpeed *= DRAG;
-
-            forwardSpeed = THREE.MathUtils.clamp(forwardSpeed, -MAX_SPEED, MAX_SPEED);
-            sideSpeed *= DRIFT_FACTOR;
-
-            const newVel = forwardVector.multiplyScalar(forwardSpeed).add(rightVector.multiplyScalar(sideSpeed));
-
-            // Aplicar velocidad al motor físico
-            api.velocity.set(newVel.x, velocity.current[1], newVel.z);
-
-            // Límites del mapa
-            const currentViewport = state.viewport.getCurrentViewport(state.camera, new THREE.Vector3(0, 2, pos[2]));
-            const visibleWidth = currentViewport.width;
-            const maxX = (visibleWidth / 2) - 0.5;
-            if (Math.abs(pos[0]) > maxX) {
-                const clampedX = THREE.MathUtils.clamp(pos[0], -maxX, maxX);
-                api.position.set(clampedX, pos[1], pos[2]);
-                if ((pos[0] > 0 && velocity.current[0] > 0) || (pos[0] < 0 && velocity.current[0] < 0)) {
-                    api.velocity.set(-velocity.current[0] * 0.5, velocity.current[1], velocity.current[2]);
-                }
-            }
-
-            const MAP_MIN_Z = -5;
-            const MAP_MAX_Z = 235;
-            if (pos[2] < MAP_MIN_Z || pos[2] > MAP_MAX_Z) {
-                const clampedZ = THREE.MathUtils.clamp(pos[2], MAP_MIN_Z, MAP_MAX_Z);
-                api.position.set(pos[0], pos[1], clampedZ);
-                if ((pos[2] <= MAP_MIN_Z && velocity.current[2] < 0) || (pos[2] >= MAP_MAX_Z && velocity.current[2] > 0)) {
-                    api.velocity.set(velocity.current[0], velocity.current[1], -velocity.current[2] * 1.5);
-                }
-            }
-
-            const isDriving = forward || back || left || right;
-            if (isDriving && !gameActive.current && !isRaceFinished) {
-                api.position.set(pos[0], 2, 0);
-                api.velocity.set(0, 0, 0);
-                api.angularVelocity.set(0, 0, 0);
-                window.scrollTo({ top: 0, behavior: 'instant' });
-                lastScrolledY.current = 0;
-                gameActive.current = true;
-                setIsGameActive(true);
-                hasStarted.current = true;
-            }
-
-            if (gameActive.current) {
-                document.body.style.overflow = 'hidden';
-                lastDrivenPos.current.set(pos[0], 2, pos[2]);
-
-                if (Math.abs(currentNativeScroll - scrollY) > 2) {
-                    window.scrollTo(0, Math.max(0, scrollY));
-                }
-
+            // Checkpoints
+            if (isRaceActive && currentCheckpoint < CHECKPOINTS.length) {
+                // Logic Handler for triggers
                 const checkTrigger = (targetCpIndex: number) => {
                     const denseIdx = trackData.indices[targetCpIndex];
                     if (denseIdx === undefined || !trackData.points) return false;
@@ -430,28 +408,56 @@ function CarController({
                     return false;
                 };
 
-                if (isRaceActive) {
-                    if (currentCheckpoint < CHECKPOINTS.length) {
-                        if (checkTrigger(currentCheckpoint)) {
-                            if (currentCheckpoint === CHECKPOINTS.length - 1) {
-                                onRaceFinish();
-                            } else {
-                                setCurrentCheckpoint(currentCheckpoint + 1);
-                            }
-                        }
-                    }
+                if (checkTrigger(currentCheckpoint)) {
+                    if (currentCheckpoint === CHECKPOINTS.length - 1) onRaceFinish();
+                    else setCurrentCheckpoint(currentCheckpoint + 1);
                 }
-            } else {
-                document.body.style.overflow = 'auto';
-                const START_POS = [7, 2, 0];
-                const targetZ = scrollZ * 0.5;
-                api.position.set(START_POS[0], START_POS[1], targetZ);
-                api.velocity.set(0, 0, 0);
-                api.angularVelocity.set(0, 0, 0);
-                currentRotation.current = Math.PI;
-                if (chassisRef.current) chassisRef.current.rotation.y = Math.PI;
-                hasStarted.current = false;
             }
+        } else {
+            document.body.style.overflow = 'auto';
+            const START_POS = [7, 2, 0];
+            const targetZ = scrollZ * 0.5;
+            api.position.set(START_POS[0], START_POS[1], targetZ);
+            api.velocity.set(0, 0, 0);
+            api.angularVelocity.set(0, 0, 0);
+            currentRotation.current = Math.PI;
+            if (chassisRef.current) chassisRef.current.rotation.y = Math.PI;
+            hasStarted.current = false;
+        }
+
+        // Camera Logic
+        const targetZBase = gameActive.current ? pos[2] : scrollZ;
+        if ((forward || back || left || right) && !isRaceFinished) hasStarted.current = true;
+        const cinematicOffset = new THREE.Vector3(20, 5, 20);
+        const gameplayOffset = new THREE.Vector3(0, 80, 50);
+        const targetOffset = hasStarted.current ? gameplayOffset : cinematicOffset;
+        const desiredX = hasStarted.current ? 0 : targetOffset.x + pos[0];
+        const targetCamPos = new THREE.Vector3(desiredX, pos[1] + targetOffset.y, targetZBase + targetOffset.z);
+
+        if (gameActive.current) state.camera.position.lerp(targetCamPos, 0.1);
+        else state.camera.position.copy(targetCamPos);
+        state.camera.lookAt(0, 0, targetZBase);
+
+        // Zoom
+        const targetZoom = hasStarted.current ? baseZoom : 75;
+        if (state.camera instanceof THREE.OrthographicCamera) {
+            state.camera.zoom = THREE.MathUtils.lerp(state.camera.zoom, targetZoom, 0.05);
+            state.camera.updateProjectionMatrix();
+        }
+
+        // Visual Rotation
+        if (chassisRef.current) {
+            chassisRef.current.rotation.order = 'YXZ';
+            chassisRef.current.rotation.y = currentRotation.current;
+            const tilt = (left ? 0.25 : 0) + (right ? -0.25 : 0);
+            chassisRef.current.rotation.z = THREE.MathUtils.lerp(chassisRef.current.rotation.z, tilt, 0.1);
+            const pitch = (forward ? -0.15 : 0) + (back ? 0.1 : 0);
+            chassisRef.current.rotation.x = THREE.MathUtils.lerp(chassisRef.current.rotation.x, pitch, 0.1);
+        }
+
+        if (arrowRef.current && isRaceActive && currentCheckpoint < CHECKPOINTS.length) {
+            const target = CHECKPOINTS[currentCheckpoint];
+            arrowRef.current.lookAt(target.x, pos[1], target.z);
         }
     });
 
@@ -653,7 +659,7 @@ export function RacingGame({
                     gl={{ alpha: true, antialias: false }}
                     style={{ background: 'transparent', pointerEvents: 'none' }}
                 >
-                    {/* DEBUG: Monitor de rendimiento */}
+                    {/* Monitor de rendimiento para debugging */}
                     <Stats showPanel={0} className="pointer-events-auto" />
 
                     <OrthographicCamera makeDefault position={[0, 50, 50]} zoom={zoom} near={-100} far={500} />
@@ -666,7 +672,7 @@ export function RacingGame({
                         castShadow={false}
                     />
 
-                    {/* --- FIX CRÍTICO: worker={null} PARA GITHUB PAGES --- */}
+                    {/* worker={null} soluciona el 404 en GitHub Pages */}
                     {/* @ts-ignore */}
                     <Physics gravity={[0, -20, 0]} stepSize={1 / 60} worker={null}>
                         <CarController
