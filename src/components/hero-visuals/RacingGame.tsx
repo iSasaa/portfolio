@@ -337,8 +337,8 @@ function CarController({
     const gameActive = useRef(false);
     const lastDrivenPos = useRef(new THREE.Vector3(7, 2, 0));
 
-    // Get Track Data for Physics/Hitboxes
-    const trackData = useMemo(() => getTrackPoints(), []);
+    // Get Track Data for Physics/Hitboxes (Use Module Constant)
+    const trackData = TRACK_DATA;
 
     useEffect(() => {
         const unsubVel = api.velocity.subscribe((v) => (velocity.current = v));
@@ -394,8 +394,8 @@ function CarController({
         };
     }, [setCurrentCheckpoint, setIsGameActive, setIsRaceActive, isRaceFinished]);
 
-    // Dynamic Track Scaling
-    const zToPixel = useRef(22); // Default fallback
+    // Dynamic Track Scaling - RESTORED for optimized scroll sync
+    const zToPixel = useRef(22);
     const FINAL_CHECKPOINT_Z = 230; // Updated to match Checkpoint 11 (Ending) depth
 
     useEffect(() => {
@@ -454,8 +454,7 @@ function CarController({
         }, 1000);
     };
 
-    // Last scroll position to avoid redundant scrollTo calls
-    const lastScrolledY = useRef(0);
+    // Last scroll position - REMOVED
 
     useFrame((state, delta) => {
         // ... (Existing Key Logic)
@@ -570,16 +569,12 @@ function CarController({
             }
         }
 
-        // Z -> SCROLL MAPPING
-        // Use Dynamic Ratio
-        const scrollY = pos[2] * zToPixel.current;
-        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-        // recalculate maxZ based on current ratio to keep physics consistent
-        const maxZ = maxScroll / zToPixel.current;
+        // Z -> SCROLL MAPPING - REMOVED
 
         // Sync Window Scroll (Hybrid Logic)
         // 1. DRIVING MODE: If user is driving (WASD), Car controls Scroll.
         const isDriving = forward || back || left || right;
+        // Calculate scrollZ for passive mode & camera
         const currentNativeScroll = window.scrollY;
         const scrollZ = currentNativeScroll / zToPixel.current;
 
@@ -595,7 +590,7 @@ function CarController({
 
             // 2. Reset Scroll immediately
             window.scrollTo({ top: 0, behavior: 'instant' }); // Instant to prevent fighting with physics loop
-            lastScrolledY.current = 0;
+            // lastScrolledY.current = 0; // REMOVED
 
             gameActive.current = true;
             setIsGameActive(true); // Sync State
@@ -606,14 +601,18 @@ function CarController({
         // Apply Mode Effects
         if (gameActive.current) {
             // --- ACTIVE GAME MODE ---
-            // "Stop the Web": Disable native scrolling
-            document.body.style.overflow = 'hidden';
+            // "Stop the Web": Disable native scrolling (Handled in useEffect now)
+            // document.body.style.overflow = 'hidden';
 
             // Update Last Known Pos
             lastDrivenPos.current.set(pos[0], 2, pos[2]);
 
-            // Sync Page Scroll to Car Z position when driving
-            window.scrollTo(0, Math.max(0, scrollY));
+            // Sync Page Scroll to Car Z position when driving (OPTIMIZED)
+            // Limit updates to prevent layout thrashing (1FPS fix)
+            const targetScrollY = pos[2] * zToPixel.current;
+            if (Math.abs(window.scrollY - targetScrollY) > 10) { // 10px threshold
+                window.scrollTo({ top: Math.max(0, targetScrollY), behavior: 'instant' });
+            }
 
             // --- CHECKPOINT / START GATE LOGIC (PRECISE OBB) ---
 
@@ -668,7 +667,7 @@ function CarController({
         } else {
             // --- PASSIVE web MODE ---
             // Reset triggered by Mouse/Scroll interaction.
-            document.body.style.overflow = 'auto'; // Ensure scrollable
+            // document.body.style.overflow = 'auto'; // Handled in useEffect
 
             // PARALLAX DRIVING EFFECT
             // Car moves Forward (+Z) as user scrolls, but slower than page.
@@ -689,6 +688,10 @@ function CarController({
 
         // Removed Z-Clamp for GameMode to allow loops (going up/down freely)
 
+        // --- 3. CAMERA SYNC ---
+        // Camera Z follows Car Z (Active) OR Scroll Z (Passive)
+        // If Game Active: Camera Follows Car
+        // If Passive: Camera tracks Scroll (Car is at Start, but we view where we scroll)
         // --- 3. CAMERA SYNC ---
         // Camera Z follows Car Z (Active) OR Scroll Z (Passive)
         // If Game Active: Camera Follows Car
@@ -886,12 +889,15 @@ function getTrackPoints() {
     return { points, indices: finalIndices };
 }
 
+// OPTIMIZATION: Calculate Track Data ONCE at module level
+const TRACK_DATA = getTrackPoints();
+
 
 // --- TRACK ROAD RENDERER ---
 function TrackRoad() {
     const roadGeometry = useMemo(() => {
-        // Use shared helper
-        const { points } = getTrackPoints();
+        // Use shared constant
+        const { points } = TRACK_DATA;
 
         if (points.length < 2) return undefined;
 
@@ -919,8 +925,8 @@ function TrackRoad() {
 
 // --- RENDERER COMPONENT ---
 function CheckpointRenderer({ currentCheckpoint, theme }: { currentCheckpoint: number, theme?: string }) {
-    // Memoize points/indices calculation
-    const { points, indices } = useMemo(() => getTrackPoints(), []);
+    // Use shared constant
+    const { points, indices } = TRACK_DATA;
 
     if (!points || points.length === 0) return null;
 
@@ -1032,6 +1038,20 @@ export function RacingGame({
     useEffect(() => {
         onGameStateChange?.(isGameActive);
     }, [isGameActive, onGameStateChange]);
+
+    // OPTIMIZATION: Handle Body Overflow here (Not in useFrame)
+    useEffect(() => {
+        if (isGameActive) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'auto';
+        }
+
+        // Cleanup on unmount
+        return () => {
+            document.body.style.overflow = 'auto';
+        };
+    }, [isGameActive]);
 
     // Reset Race Function
     const resetRace = () => {
