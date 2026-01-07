@@ -2,7 +2,7 @@
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, useBox, usePlane, useSphere } from "@react-three/cannon";
-import { PerspectiveCamera, OrthographicCamera, useKeyboardControls, KeyboardControls, Billboard, Text, Html, Sparkles, Edges, Stats } from "@react-three/drei";
+import { PerspectiveCamera, OrthographicCamera, useKeyboardControls, KeyboardControls, Billboard, Text, Html, Sparkles, Edges } from "@react-three/drei";
 import { useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
 import { useTheme } from "next-themes";
@@ -169,7 +169,8 @@ function CarController({
     const currentSpeed = useRef(0); // Velocitat escalar objectiu
     const velocity = useRef([0, 0, 0]); // Velocitat física real
     const positionRef = useRef([7, 2, 0]);
-    const currentRotation = useRef(Math.PI);
+    const currentRotation = useRef(Math.PI); // On mira el cotxe (visual)
+    const velocityVectorAngle = useRef(Math.PI); // On es mou el cotxe (físic)
 
     const [, getKeys] = useKeyboardControls<Controls>();
     const { viewport, camera } = useThree();
@@ -200,6 +201,7 @@ function CarController({
             currentSpeed.current = 0;
 
             currentRotation.current = Math.PI;
+            velocityVectorAngle.current = Math.PI;
             if (chassisRef.current) chassisRef.current.rotation.y = Math.PI;
         }
     }, [resetToken, api.position, api.velocity, api.angularVelocity, setIsGameActive, setCurrentCheckpoint]);
@@ -255,6 +257,7 @@ function CarController({
         api.angularVelocity.set(0, 0, 0);
         currentSpeed.current = 0;
         currentRotation.current = -Math.PI / 2;
+        velocityVectorAngle.current = -Math.PI / 2;
         if (chassisRef.current) chassisRef.current.rotation.y = -Math.PI / 2;
         setCountdown(3);
         let count = 3;
@@ -275,57 +278,76 @@ function CarController({
 
     useFrame((state, delta) => {
         let { forward, back, left, right } = getKeys();
+        const drift = getKeys().drift; // Espai per derrapar
 
         if (isRaceFinished || countdown !== null) {
             forward = false; back = false; left = false; right = false;
         }
 
-        const startDrift = getKeys().drift;
-
-        // --- PARÀMETRES DE FÍSICA (ARCADE PUR) ---
-        // Velocitats molt altes per compensar qualsevol lag
+        // --- PARÀMETRES DE FÍSICA (ARCADE + DRIFT) ---
         const MAX_SPEED = 35;
-        const ACCELERATION = 200 * delta; // Acceleració independent dels frames
-        const BRAKING = 150 * delta;
-        const DRAG = 0.98; // Fricció de l'aire suau
-        const TURN_SPEED = 3.5 * delta;
+        const ACCELERATION = 200 * delta;
 
-        // 1. CÀLCUL DE VELOCITAT (Model directe)
+        // Ajustem dinàmiques segons si derrapem
+        const TURN_SPEED_BASE = 3.5 * delta;
+        const TURN_SPEED_DRIFT = 5.0 * delta; // Gira més ràpid visualment
+        const TURN_SPEED = drift ? TURN_SPEED_DRIFT : TURN_SPEED_BASE;
+
+        const DRAG = 0.98;
+
+        // GRIP: Quant triga el vector de velocitat a alinear-se amb el cotxe
+        // High grip = conducció normal (instantani o quasi)
+        // Low grip = drift (gel/derrapada)
+        const GRIP_NORMAL = 0.15; // 1.0 seria instantani (arcade pur)
+        const GRIP_DRIFT = 0.02; // Molt baix, llisca molt
+        const currentGrip = drift ? GRIP_DRIFT : GRIP_NORMAL;
+
+        // 1. CÀLCUL DE VELOCITAT ESCALAR (Gas/Fre)
         if (forward) {
             currentSpeed.current += ACCELERATION;
         } else if (back) {
             currentSpeed.current -= ACCELERATION;
         } else {
-            // Deceleració natural (fregament)
             currentSpeed.current *= DRAG;
         }
-
-        // Limitar velocitat màxima
         currentSpeed.current = THREE.MathUtils.clamp(currentSpeed.current, -MAX_SPEED, MAX_SPEED);
 
-        // 2. GIRS
-        // Només girem si ens movem (evita girar sobre l'eix parat)
+        // 2. GIRS (Visuals - On mira el cotxe)
         if (Math.abs(currentSpeed.current) > 0.1) {
-            const turnFactor = Math.min(Math.abs(currentSpeed.current) / 20, 1); // Gir progressiu
-            if (left) currentRotation.current += TURN_SPEED * turnFactor;
-            if (right) currentRotation.current -= TURN_SPEED * turnFactor;
+            const turnFactor = Math.min(Math.abs(currentSpeed.current) / 10, 1);
+            // Invertim direcció si anem marxa enrere
+            const dir = (currentSpeed.current > 0) ? 1 : -1;
+
+            if (left) currentRotation.current += TURN_SPEED * turnFactor * dir;
+            if (right) currentRotation.current -= TURN_SPEED * turnFactor * dir;
         }
 
-        // 3. APLICAR VELOCITAT AL MÓN
-        const vx = -Math.sin(currentRotation.current) * currentSpeed.current;
-        const vz = -Math.cos(currentRotation.current) * currentSpeed.current;
+        // 3. FÍSICA DE DERRAPADA (Vector Velocitat)
+        // Interpol·lem l'angle de moviment cap a l'angle del cotxe segons el GRIP
+        // Utilitzem lerp d'angles per evitar problemes amb el pas de PI a -PI
+        let diff = currentRotation.current - velocityVectorAngle.current;
+        // Normalitzar diferència entre -PI i PI
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
 
-        // Sobreescriure la velocitat física cada frame (Molt important per GitHub Pages)
+        // Aplicar grip (apropar vector de moviment a la direcció del cotxe)
+        // Si estem parats o quasi parats, el vector s'alinea ràpid (no derrapa estant parat)
+        const effectiveGrip = (Math.abs(currentSpeed.current) < 5) ? 1.0 : currentGrip;
+        velocityVectorAngle.current += diff * effectiveGrip;
+
+        // 4. APLICAR VELOCITAT AL MÓN
+        const vx = -Math.sin(velocityVectorAngle.current) * currentSpeed.current;
+        const vz = -Math.cos(velocityVectorAngle.current) * currentSpeed.current;
+
         api.velocity.set(vx, velocity.current[1], vz);
 
-        // 4. DETECCIÓ START PAD (Fora de bucles estranys)
+        // 5. DETECCIÓ START PAD
         const pos = positionRef.current;
         if (!isRaceActive && !countdown && !isRaceFinished) {
             const dx = pos[0] - RACE_PAD_POS.x;
             const dz = pos[2] - RACE_PAD_POS.z;
             const distSq = dx * dx + dz * dz;
 
-            // Radi augmentat a 15 unitats (225 quadrat) per assegurar que es detecta
             if (distSq < 225) {
                 startCountdownSequence();
             }
@@ -339,9 +361,18 @@ function CarController({
         if (chassisRef.current) {
             chassisRef.current.rotation.order = 'YXZ';
             chassisRef.current.rotation.y = currentRotation.current;
-            // Tilt visual
-            const tilt = (left ? 0.25 : 0) + (right ? -0.25 : 0);
-            chassisRef.current.rotation.z = THREE.MathUtils.lerp(chassisRef.current.rotation.z, tilt, 0.1);
+
+            // Tilt visual millorat per drift
+            // Si derrapem, el cotxe pot inclinar-se diferent o fer "body roll"
+            const lateralForce = (currentRotation.current - velocityVectorAngle.current) * 2; // Força centrífuga aprox visual
+            const baseTilt = (left ? 0.25 : 0) + (right ? -0.25 : 0);
+
+            // Barreja entre input i inèrcia de derrapada
+            let targetTilt = baseTilt;
+            if (drift) targetTilt += lateralForce * 0.5;
+
+            chassisRef.current.rotation.z = THREE.MathUtils.lerp(chassisRef.current.rotation.z, targetTilt, 0.1);
+
             const pitch = (forward ? -0.15 : 0) + (back ? 0.1 : 0);
             chassisRef.current.rotation.x = THREE.MathUtils.lerp(chassisRef.current.rotation.x, pitch, 0.1);
         }
@@ -654,8 +685,8 @@ export function RacingGame({
                     gl={{ alpha: true, antialias: false }}
                     style={{ background: 'transparent', pointerEvents: 'none' }}
                 >
-                    {/* DEBUG: Monitor de rendimiento */}
-                    <Stats showPanel={0} className="pointer-events-auto" />
+                    {/* DEBUG: Monitor de rendimiento - ELIMINAT */}
+                    {/* <Stats showPanel={0} className="pointer-events-auto" /> */}
 
                     <OrthographicCamera makeDefault position={[0, 50, 50]} zoom={zoom} near={-100} far={500} />
 
