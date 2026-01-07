@@ -325,15 +325,31 @@ function CarController({
         // 3. FÍSICA DE DERRAPADA (Vector Velocitat)
         // Interpol·lem l'angle de moviment cap a l'angle del cotxe segons el GRIP
         // Utilitzem lerp d'angles per evitar problemes amb el pas de PI a -PI
-        let diff = currentRotation.current - velocityVectorAngle.current;
+        // Calculem la diferència entre on mira el cotxe i on es mou (Slip Angle)
+        let slipAngle = currentRotation.current - velocityVectorAngle.current;
         // Normalitzar diferència entre -PI i PI
-        while (diff > Math.PI) diff -= 2 * Math.PI;
-        while (diff < -Math.PI) diff += 2 * Math.PI;
+        while (slipAngle > Math.PI) slipAngle -= 2 * Math.PI;
+        while (slipAngle < -Math.PI) slipAngle += 2 * Math.PI;
+
+        // LIMITADOR D'ANGLE DE DERRAPADA (Fix spinning)
+        // El cotxe no pot girar més de X graus respecte a la seva direcció de moviment
+        const MAX_SLIP_ANGLE = THREE.MathUtils.degToRad(55); // Màxim 55 graus de derrapada
+
+        if (drift && Math.abs(currentSpeed.current) > 10) {
+            // Si derrapem i anem ràpid, clampem l'angle visual
+            if (slipAngle > MAX_SLIP_ANGLE) {
+                currentRotation.current = velocityVectorAngle.current + MAX_SLIP_ANGLE;
+                slipAngle = MAX_SLIP_ANGLE;
+            } else if (slipAngle < -MAX_SLIP_ANGLE) {
+                currentRotation.current = velocityVectorAngle.current - MAX_SLIP_ANGLE;
+                slipAngle = -MAX_SLIP_ANGLE;
+            }
+        }
 
         // Aplicar grip (apropar vector de moviment a la direcció del cotxe)
         // Si estem parats o quasi parats, el vector s'alinea ràpid (no derrapa estant parat)
         const effectiveGrip = (Math.abs(currentSpeed.current) < 5) ? 1.0 : currentGrip;
-        velocityVectorAngle.current += diff * effectiveGrip;
+        velocityVectorAngle.current += slipAngle * effectiveGrip;
 
         // 4. APLICAR VELOCITAT AL MÓN
         const vx = -Math.sin(velocityVectorAngle.current) * currentSpeed.current;
@@ -348,7 +364,7 @@ function CarController({
             const dz = pos[2] - RACE_PAD_POS.z;
             const distSq = dx * dx + dz * dz;
 
-            if (distSq < 225) {
+            if (distSq < 36) {
                 startCountdownSequence();
             }
         }
@@ -364,12 +380,15 @@ function CarController({
 
             // Tilt visual millorat per drift
             // Si derrapem, el cotxe pot inclinar-se diferent o fer "body roll"
-            const lateralForce = (currentRotation.current - velocityVectorAngle.current) * 2; // Força centrífuga aprox visual
-            const baseTilt = (left ? 0.25 : 0) + (right ? -0.25 : 0);
+            const lateralForce = slipAngle * 1.5;
+            const baseTilt = (left ? 0.15 : 0) + (right ? -0.15 : 0); // Menys tilt base
 
             // Barreja entre input i inèrcia de derrapada
             let targetTilt = baseTilt;
-            if (drift) targetTilt += lateralForce * 0.5;
+            if (drift) targetTilt += lateralForce * 0.25;
+
+            // Clamp final per seguretat (mai més de 25 graus)
+            targetTilt = THREE.MathUtils.clamp(targetTilt, -0.4, 0.4);
 
             chassisRef.current.rotation.z = THREE.MathUtils.lerp(chassisRef.current.rotation.z, targetTilt, 0.1);
 
