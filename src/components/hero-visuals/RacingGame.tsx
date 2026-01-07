@@ -122,7 +122,7 @@ function RaceStartPad({ position }: { position: [number, number, number] }) {
     );
 }
 
-// --- CAR CONTROLLER (VELOCIDAD AUMENTADA + DRIFT ARCADE) ---
+// --- CAR CONTROLLER (VELOCIDAD EXTREMA + DRIFT) ---
 
 function CarController({
     currentCheckpoint,
@@ -156,19 +156,16 @@ function CarController({
         position: [7, 2, 0],
         args: [1],
         fixedRotation: true,
-        // Sin damping físico para control total por código
-        linearDamping: 0,
-        angularDamping: 0,
+        linearDamping: 0.10,
         material: { friction: 0.0, restitution: 0 }
     }));
 
     const chassisRef = useRef<THREE.Group>(null);
     const arrowRef = useRef<THREE.Group>(null);
 
-    // VECTOR DE VELOCIDAD LOCAL (Para inercia y drift)
+    // VECTOR DE VELOCIDAD LOCAL
     const localVelocity = useRef(new THREE.Vector3(0, 0, 0));
 
-    // Referencias físicas
     const velocity = useRef([0, 0, 0]);
     const positionRef = useRef([7, 2, 0]);
     const currentRotation = useRef(Math.PI);
@@ -287,20 +284,18 @@ function CarController({
 
         const startDrift = getKeys().drift;
 
-        // --- PARÁMETROS DE FÍSICA ARCADE (Ajustados) ---
-        const MAX_SPEED = 85;  // Velocidad aumentada
-        const ACCEL = 1.5;     // Aceleración más potente
-        const TURN_SPEED = 0.05; // Giro más rápido
-        const DRAG = 0.96;     // Fricción aire
+        // --- CONFIGURACIÓN DE FÍSICA RÁPIDA ---
+        const MAX_SPEED = 120; // Velocidad muy alta
+        const ACCEL = 3.5;     // Aceleración instantánea
+        const TURN_SPEED = 0.055;
+        const DRAG = 0.96;
 
-        // --- CONFIGURACIÓN DE DRIFT ---
-        // Grip bajo = el coche desliza. Grip alto = va sobre raíles.
-        // GRIP_NORMAL: 0.1 permite un ligero deslizamiento en curvas rápidas
-        // GRIP_DRIFT: 0.015 es hielo puro para derrapar fuerte
-        const GRIP_NORMAL = 0.1;
-        const GRIP_DRIFT = 0.015;
+        // --- DRIFT ---
+        // Grip normal alto para curvas rápidas, Grip bajo para drift manual
+        const GRIP_NORMAL = 0.15;
+        const GRIP_DRIFT = 0.01;
 
-        // 1. VISUALS (Suavizado)
+        // 1. VISUALS
         const pos = positionRef.current;
         const scrollY = pos[2] * zToPixel.current;
         const currentNativeScroll = window.scrollY;
@@ -309,7 +304,6 @@ function CarController({
         if (chassisRef.current) {
             chassisRef.current.rotation.order = 'YXZ';
             chassisRef.current.rotation.y = currentRotation.current;
-            // Tilt visual al girar/acelerar
             const tilt = (left ? 0.25 : 0) + (right ? -0.25 : 0);
             chassisRef.current.rotation.z = THREE.MathUtils.lerp(chassisRef.current.rotation.z, tilt, 0.1);
             const pitch = (forward ? -0.15 : 0) + (back ? 0.1 : 0);
@@ -343,7 +337,7 @@ function CarController({
             arrowRef.current.lookAt(target.x, pos[1], target.z);
         }
 
-        // --- 2. LÓGICA DE FÍSICA (Loop fijo para consistencia) ---
+        // --- 2. LÓGICA DE FÍSICA ---
         timeAccumulator.current += delta;
 
         if (timeAccumulator.current >= FIXED_TIME_STEP) {
@@ -355,43 +349,36 @@ function CarController({
                 const dz = pos[2] - RACE_PAD_POS.z;
                 const distSq = dx * dx + dz * dz;
 
-                // Radi 5 unidades (5^2 = 25) - Normal
-                if (distSq < 25) {
+                // Radi 6 unitats (36 quadrat)
+                if (distSq < 36) {
                     timeStoppedOnPad.current = 0;
                     startCountdownSequence();
                 }
             }
 
-            // --- CÁLCULO DE DRIFT Y MOVIMIENTO ---
+            // --- VECTORES ---
 
-            // 1. Vector "Hacia adelante" del coche (según rotación)
             const forwardDir = new THREE.Vector3(
                 -Math.sin(currentRotation.current),
                 0,
                 -Math.cos(currentRotation.current)
             );
 
-            // 2. Aplicar Aceleración al vector de velocidad actual
             if (forward) {
                 localVelocity.current.add(forwardDir.multiplyScalar(ACCEL));
             } else if (back) {
                 localVelocity.current.sub(forwardDir.multiplyScalar(ACCEL));
             }
 
-            // 3. Girar el coche
             const speedMagnitude = localVelocity.current.length();
-            const turnMultiplier = Math.min(speedMagnitude / 15, 1); // Giro depende de velocidad
+            const turnMultiplier = Math.min(speedMagnitude / 15, 1);
 
             if (left) currentRotation.current += TURN_SPEED * turnMultiplier;
             if (right) currentRotation.current -= TURN_SPEED * turnMultiplier;
 
-            // 4. Simulación de Tracción (Drift)
-            // Interpolamos el vector de velocidad actual hacia la nueva dirección del coche.
-            // Si el 'grip' es bajo, la velocidad tarda en alinearse -> el coche derrapa.
-
+            // --- DRIFT ---
             const currentGrip = startDrift ? GRIP_DRIFT : GRIP_NORMAL;
 
-            // Nueva dirección tras el giro
             const newForwardDir = new THREE.Vector3(
                 -Math.sin(currentRotation.current),
                 0,
@@ -400,30 +387,23 @@ function CarController({
 
             if (speedMagnitude > 0.1) {
                 const currentDir = localVelocity.current.clone().normalize();
-
-                // Mezcla vectorial (Inercia vs Tracción)
                 const blendedDir = new THREE.Vector3().lerpVectors(currentDir, newForwardDir, currentGrip).normalize();
-
-                // Aplicar fricción del aire (Drag)
                 let newSpeed = speedMagnitude * DRAG;
                 newSpeed = Math.min(newSpeed, MAX_SPEED);
-
-                // Actualizar vector final
                 localVelocity.current.copy(blendedDir.multiplyScalar(newSpeed));
             } else {
                 localVelocity.current.set(0, 0, 0);
             }
 
-            // 5. Enviar velocidad calculada a Cannon.js
             api.velocity.set(localVelocity.current.x, velocity.current[1], localVelocity.current.z);
 
-            // Colisiones con objetos (Si velocidad física cae de golpe, rebotar)
+            // COLISIONES
             const realVelocityMagnitude = new THREE.Vector3(velocity.current[0], 0, velocity.current[2]).length();
             if (speedMagnitude > 5 && realVelocityMagnitude < 1) {
-                localVelocity.current.multiplyScalar(0.5); // Absorber impacto
+                localVelocity.current.multiplyScalar(0.5);
             }
 
-            // LÍMITES DEL MAPA Y PAREDES
+            // LIMITES
             const currentViewport = state.viewport.getCurrentViewport(state.camera, new THREE.Vector3(0, 2, pos[2]));
             const visibleWidth = currentViewport.width;
             const maxX = (visibleWidth / 2) - 0.5;
@@ -431,7 +411,6 @@ function CarController({
             if (Math.abs(pos[0]) > maxX) {
                 const clampedX = THREE.MathUtils.clamp(pos[0], -maxX, maxX);
                 api.position.set(clampedX, pos[1], pos[2]);
-                // Rebote lateral
                 if ((pos[0] > 0 && localVelocity.current.x > 0) || (pos[0] < 0 && localVelocity.current.x < 0)) {
                     localVelocity.current.x *= -0.5;
                 }
@@ -442,13 +421,11 @@ function CarController({
             if (pos[2] < MAP_MIN_Z || pos[2] > MAP_MAX_Z) {
                 const clampedZ = THREE.MathUtils.clamp(pos[2], MAP_MIN_Z, MAP_MAX_Z);
                 api.position.set(pos[0], pos[1], clampedZ);
-                // Rebote frontal/trasero
                 if ((pos[2] <= MAP_MIN_Z && localVelocity.current.z < 0) || (pos[2] >= MAP_MAX_Z && localVelocity.current.z > 0)) {
                     localVelocity.current.z *= -0.5;
                 }
             }
 
-            // ACTIVACIÓN DE MODO JUEGO
             const isDriving = forward || back || left || right;
             if (isDriving && !gameActive.current && !isRaceFinished) {
                 api.position.set(pos[0], 2, 0);
@@ -463,7 +440,6 @@ function CarController({
                 hasStarted.current = true;
             }
 
-            // SINCRONIZACIÓN SCROLL
             if (gameActive.current) {
                 document.body.style.overflow = 'hidden';
                 lastDrivenPos.current.set(pos[0], 2, pos[2]);
@@ -486,7 +462,6 @@ function CarController({
                         const distLong = toCar.dot(tangent);
                         const distLatVec = toCar.clone().sub(tangent.clone().multiplyScalar(distLong));
                         const distLat = distLatVec.length();
-                        // Hitbox generosa para checkpoints
                         if (Math.abs(distLong) < 2.5 && distLat < 8) return true;
                         return false;
                     };
