@@ -2,7 +2,7 @@
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, useBox, usePlane, useSphere } from "@react-three/cannon";
-import { PerspectiveCamera, OrthographicCamera, useKeyboardControls, KeyboardControls, Billboard, Text, Html, Sparkles, Edges } from "@react-three/drei";
+import { PerspectiveCamera, OrthographicCamera, useKeyboardControls, KeyboardControls, Billboard, Text, Html, Sparkles, Edges, Stats } from "@react-three/drei";
 import { useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
 import { useTheme } from "next-themes";
@@ -503,8 +503,7 @@ function CarController({
             document.body.style.overflow = 'hidden';
             lastDrivenPos.current.set(pos[0], 2, pos[2]);
 
-            // --- FIX CRITIC: OPTIMIZACIÓ SCROLL ---
-            // Només fem scroll si la diferencia es gran per evitar "Layout Thrashing"
+            // --- OPTIMITZACIÓ SCROLL ---
             if (Math.abs(currentNativeScroll - scrollY) > 2) {
                 window.scrollTo(0, Math.max(0, scrollY));
             }
@@ -804,14 +803,15 @@ export function RacingGame({
 
         <div className="fixed inset-0 z-50 pointer-events-none">
             <KeyboardControls map={map}>
-                {/* --- FIX CRITIC: OPTIMITZACIONS DE CANVAS --- */}
-                {/* dpr limitat, shadows desactivat per defecte, antialias desactivat */}
                 <Canvas
                     shadows={false}
                     dpr={[1, 1.5]}
                     gl={{ alpha: true, antialias: false }}
                     style={{ background: 'transparent', pointerEvents: 'none' }}
                 >
+                    {/* DEBUG: Monitor de rendiment (a dalt a l'esquerra) */}
+                    <Stats showPanel={0} className="pointer-events-auto" />
+
                     <OrthographicCamera makeDefault position={[0, 50, 50]} zoom={zoom} near={-100} far={500} />
 
                     <ambientLight intensity={0.5} />
@@ -822,9 +822,11 @@ export function RacingGame({
                         castShadow={false}
                     />
 
-                    {/* --- FIX CRITIC: TIMESTEP DE FÍSIQUES --- */}
-                    {/* Canviat timeStep a stepSize per arreglar error de TypeScript */}
-                    <Physics gravity={[0, -20, 0]} stepSize={1 / 60}>
+                    {/* --- FIX CRITIC --- */}
+                    {/* worker={null} és la clau: Desactiva el Web Worker que falla a GitHub Pages (404) */}
+                    {/* i força que les físiques corrin al fil principal, evitant el bloqueig. */}
+                    {/* @ts-ignore */}
+                    <Physics gravity={[0, -20, 0]} stepSize={1 / 60} worker={null}>
                         <CarController
                             currentCheckpoint={currentCheckpoint}
                             setCurrentCheckpoint={setCurrentCheckpoint}
