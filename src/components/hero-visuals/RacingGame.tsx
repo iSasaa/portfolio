@@ -284,7 +284,7 @@ function CarController({
 
         // --- PARÀMETRES DE FÍSICA (ARCADE PUR) ---
         // Velocitats molt altes per compensar qualsevol lag
-        const MAX_SPEED = 90;
+        const MAX_SPEED = 35;
         const ACCELERATION = 200 * delta; // Acceleració independent dels frames
         const BRAKING = 150 * delta;
         const DRAG = 0.98; // Fricció de l'aire suau
