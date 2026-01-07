@@ -294,7 +294,8 @@ function CarController({
     selectedCar,
     baseZoom
 }: {
-    setDebugInfo: (info: any) => void,
+    // setDebugInfo removed
+
     currentCheckpoint: number,
     setCurrentCheckpoint: (idx: number) => void,
     setIsGameActive: (active: boolean) => void,
@@ -769,17 +770,6 @@ function CarController({
             arrowRef.current.lookAt(target.x, pos[1], target.z);
         }
 
-        // Debug
-        if (setDebugInfo) {
-            setDebugInfo({
-                keys: { forward, back, left, right },
-                velocity: velocity.current.map(v => v.toFixed(2)),
-                rotation: currentRotation.current.toFixed(2),
-                pos: positionRef.current.map(v => v.toFixed(1)),
-                checkpoint: currentCheckpoint,
-                bounds: `MapZ: [-5, 235]`
-            });
-        }
     });
 
     return (
@@ -1023,7 +1013,8 @@ export function RacingGame({
         { name: Controls.reset, keys: ['KeyR'] },
     ], []);
 
-    const [debugInfo, setDebugInfo] = useState<any>(null);
+    // const [debugInfo, setDebugInfo] = useState<any>(null); // Removed for performance
+
     const [currentCheckpoint, setCurrentCheckpoint] = useState(0);
     const [isGameActive, setIsGameActive] = useState(false); // Controls "Driving" (Input capture)
     const [isRaceActive, setIsRaceActive] = useState(false); // Controls "Race Mode" (Track visible, Timer)
@@ -1084,7 +1075,8 @@ export function RacingGame({
 
                     <Physics gravity={[0, -20, 0]}> {/* Stronger gravity to keep car grounded */}
                         <CarController
-                            setDebugInfo={setDebugInfo}
+                            // setDebugInfo={setDebugInfo} // Removed
+
                             currentCheckpoint={currentCheckpoint}
                             setCurrentCheckpoint={setCurrentCheckpoint}
                             setIsGameActive={setIsGameActive}
