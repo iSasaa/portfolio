@@ -454,9 +454,15 @@ function CarController({
         }, 1000);
     };
 
+    // Last scroll position to avoid redundant scrollTo calls
+    const lastScrolledY = useRef(0);
+
     useFrame((state, delta) => {
         // ... (Existing Key Logic)
         let { forward, back, left, right, reset } = getKeys();
+
+        // Basetime factor: target 60fps (1/60 = 0.0166)
+        const frameScale = delta * 60;
 
         // DISABLE INPUTS IF RACE FINISHED OR DURING COUNTDOWN
         if (isRaceFinished || countdown !== null) {
@@ -471,10 +477,14 @@ function CarController({
 
         // ... (Physics Constants)
         const MAX_SPEED = 35;
-        const ACCEL = 0.8;
-        const STEER_SPEED = 0.025;
+        const ACCEL = 0.8 * frameScale;
+        const STEER_SPEED = 0.025 * frameScale;
         const DRIFT_FACTOR = startDrift ? 0.985 : 0.90; // Drift = slippery (0.985), Normal = Grippy (0.90)
-        const DRAG = 0.92;
+
+        // Drag calculation needs to be delta-aware for consistency
+        // (1 - DRAG) is the loss per frame at 60fps.
+        const DRAG_VAL = 0.08 * frameScale;
+        const DRAG = 1 - DRAG_VAL;
 
         // Calc Speed
         const currentVel = new THREE.Vector3(velocity.current[0], 0, velocity.current[2]);
@@ -592,6 +602,7 @@ function CarController({
 
             // 2. Reset Scroll immediately
             window.scrollTo({ top: 0, behavior: 'instant' }); // Instant to prevent fighting with physics loop
+            lastScrolledY.current = 0;
 
             gameActive.current = true;
             setIsGameActive(true); // Sync State
@@ -609,8 +620,12 @@ function CarController({
             lastDrivenPos.current.set(pos[0], 2, pos[2]);
 
             // Sync Page Scroll to Car Z position when driving
-            // Sync Page Scroll to Car Z position when driving
-            window.scrollTo(0, Math.max(0, scrollY));
+            // PERFORMANCE FIX: Only scrollTo if significantly changed
+            const targetY = Math.max(0, scrollY);
+            if (Math.abs(targetY - lastScrolledY.current) > 0.5) {
+                window.scrollTo(0, targetY);
+                lastScrolledY.current = targetY;
+            }
 
             // --- CHECKPOINT / START GATE LOGIC (PRECISE OBB) ---
 
@@ -1060,7 +1075,7 @@ export function RacingGame({
 
         <div className="fixed inset-0 z-50 pointer-events-none"> {/* Global Overlay, clicks pass through */}
             <KeyboardControls map={map}>
-                <Canvas shadows dpr={[1, 2]} gl={{ alpha: true }} style={{ background: 'transparent', pointerEvents: 'none' }}>
+                <Canvas shadows dpr={1} gl={{ alpha: true }} style={{ background: 'transparent', pointerEvents: 'none' }}>
                     {/* Orthographic Camera for Isometric 'No-Distortion' Look */}
                     <OrthographicCamera makeDefault position={[0, 50, 50]} zoom={zoom} near={-100} far={500} />
 
