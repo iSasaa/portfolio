@@ -461,6 +461,9 @@ function CarController({
         // ... (Existing Key Logic)
         let { forward, back, left, right, reset } = getKeys();
 
+        // 60fps baseline scale
+        const frameScale = delta * 60;
+
         // DISABLE INPUTS IF RACE FINISHED OR DURING COUNTDOWN
         if (isRaceFinished || countdown !== null) {
             forward = false;
@@ -474,10 +477,10 @@ function CarController({
 
         // ... (Physics Constants)
         const MAX_SPEED = 35;
-        const ACCEL = 0.8;
-        const STEER_SPEED = 0.025;
-        const DRIFT_FACTOR = startDrift ? 0.985 : 0.90; // Drift = slippery (0.985), Normal = Grippy (0.90)
-        const DRAG = 0.92;
+        const ACCEL = 0.8 * frameScale;
+        const STEER_SPEED = 0.025 * frameScale;
+        const DRAG = Math.pow(0.92, frameScale);
+        const DRIFT_FACTOR = Math.pow(startDrift ? 0.985 : 0.90, frameScale);
 
         // Calc Speed
         const currentVel = new THREE.Vector3(velocity.current[0], 0, velocity.current[2]);
