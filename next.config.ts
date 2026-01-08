@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   },
   // Conditionally apply basePath for GitHub Actions deployment
   basePath: process.env.GITHUB_ACTIONS ? "/portfolio" : "",
+  env: {
+    BASE_PATH: process.env.GITHUB_ACTIONS ? "/portfolio" : "",
+  },
 };
 
 export default nextConfig;
