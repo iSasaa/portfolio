@@ -95,7 +95,7 @@ export default function Hero() {
                             </a>
                         </Button>
                         <Button variant="outline" className="h-12 px-8 text-lg border-primary/20 hover:bg-primary/5 transition-all" asChild>
-                            <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/cv.pdf`} download="Joan_Sasanedas_CV.pdf">
+                            <a href="./cv.pdf" download="Joan_Sasanedas_CV.pdf">
                                 <Download className="w-5 h-5 mr-2" />
                                 Download CV
                             </a>
