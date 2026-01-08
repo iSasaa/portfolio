@@ -15,8 +15,43 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Joan Sasanedas | Software Engineer & Cloud Infrastructure",
-  description: "Senior Fullstack Engineer & UX/UI Designer Portfolio. Specializing in Python, Next.js, and Cloud Infrastructure.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://joansasanedas.dev"),
+  title: {
+    default: "Joan Sasanedas | Software Engineer",
+    template: "%s | Joan Sasanedas",
+  },
+  description:
+    "Software Engineer & UX/UI Designer Portfolio. Specializing in Python, Next.js, and Cloud Infrastructure.",
+  keywords: [
+    "Software Engineer",
+    "Python",
+    "Next.js",
+    "Cloud Infrastructure",
+    "Portfolio",
+    "Joan Sasanedas",
+    "Web Development",
+  ],
+  authors: [{ name: "Joan Sasanedas" }],
+  openGraph: {
+    title: "Joan Sasanedas | Software Engineer",
+    description:
+      "Software Engineer & UX/UI Designer Portfolio. Specializing in Python, Next.js, and Cloud Infrastructure.",
+    url: "/",
+    siteName: "Joan Sasanedas Portfolio",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Joan Sasanedas | Software Engineer",
+    description:
+      "Software Engineer & UX/UI Designer Portfolio. Specializing in Python, Next.js, and Cloud Infrastructure.",
+    creator: "@joansasanedas",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
