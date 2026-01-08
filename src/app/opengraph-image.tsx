@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-// export const runtime = "edge"; // Reverted to default runtime due to build error
+export const dynamic = "force-static";
 
 export const alt = "Joan Sasanedas - Software Engineer Portfolio";
 export const size = {
